@@ -6,8 +6,11 @@ namespace Z{
         class Parser
         {
         public:
-                Parser();
+                Parser(const std::wstring& code);
                 ~Parser();
+                bool            isSuccess();
+                std::wstring    ErrorMsg();
+                void            Parse();
                 
         private:
                 mutable Tokenizer tkn;
