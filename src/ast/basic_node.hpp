@@ -43,9 +43,9 @@ namespace Z{
         class Expr2Stmt : public virtual Statement {
                 Expression* expr;
         public:
-                ~Expr2Stmt() override { expr->FullRelease(); }
+                ~Expr2Stmt() override { /*if(expr)expr->FullRelease();*/ }
                 Expr2Stmt(Expression * expr):expr(expr){}
-                virtual ret_ty emit(inp_ty) override {}
+                virtual ret_ty emit(inp_ty) override {expr->emit();}
                 virtual NodeTy type() override { return NodeTy::Expr2Stmt; }
 
         };

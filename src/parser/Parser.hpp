@@ -10,7 +10,7 @@ namespace Z{
                 ~Parser();
                 bool            isSuccess();
                 std::wstring    ErrorMsg();
-                void            Parse();
+                Statement*      Parse();
                 
         private:
                 mutable Tokenizer tkn;

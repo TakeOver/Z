@@ -1,4 +1,5 @@
 #include "Tokenizer.hpp"
+#include <iostream>
 namespace Z{
         namespace {
                 using tk = Tokenizer;
@@ -11,8 +12,8 @@ namespace Z{
                 inline bool is_op       (wchar_t c){ 
                         return (c==L'@') ||(c==L'%') || (c==L'~') || (c==L'!') || (c==L'{') || (c==L'}')
                                 || (c==L']')|| (c==L'[') || (c==L'(')|| (c==L')')
-                                || (c==L'^') ||(c==L':') ||(c==L'&') ||(c==L'*')
-                                || (c==L'-') ||(c==L'+') ||  (c==L'=') 
+                                || (c==L'^') ||(c==L':') ||(c==L'&') ||(c==L'*') || (c==L':')
+                                || (c==L'-') ||(c==L'+') ||  (c==L'=') || (c==L'$')
                                 || (c==L'/') || (c==L'?') || (c==L'>') || (c==L'<') 
                                 || (c==L'.') || (c==L'|') || (c==L';') || (c==L'\\') || (c==L',');
                 }
@@ -21,6 +22,7 @@ namespace Z{
 
         tk::Tokenizer(const std::wstring & code):code(code){}
         tk::~Tokenizer(){}
+        bool tk::eof()const { return _eof(); }
         Token& tk::Last()const{
                 if(cache_pos){
                         return cache[cache_pos-1];
@@ -31,6 +33,7 @@ namespace Z{
                 _defkw(str, ty,op);
         }
         Token& tk::Next() const {
+                if(eof())return __tokNone;
                 if(cache_pos<cache.size()){
                         return cache[cache_pos++];
                 }

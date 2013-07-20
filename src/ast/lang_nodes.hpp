@@ -1,4 +1,5 @@
 #pragma once
+#include <iostream>
 #include "basic_node.hpp"
 #include "../tokenizer/Token.hpp"
 namespace Z{
@@ -10,7 +11,13 @@ namespace Z{
                 ~BinOp() override { delete lhs; delete rhs; }
                 virtual uint64_t reg()override{ return _reg; }
                 BinOp(const Token& op, Expression * lhs, Expression * rhs):op(op),lhs(lhs),rhs(rhs){}
-                virtual ret_ty emit(inp_ty) override {}
+                virtual ret_ty emit(inp_ty) override {
+                        std::wcerr << L"(";
+                        lhs->emit();
+                        std::wcerr <<op.str;
+                        rhs->emit();
+                        std::wcerr << L")";
+                }
                 virtual NodeTy type() override { return NodeTy::BinOp; }
         };
         class UnOp: public virtual Expression{
@@ -21,7 +28,11 @@ namespace Z{
                 ~UnOp() override { delete lhs; }
                 virtual uint64_t reg()override{ return _reg; }
                 UnOp(const Token& op, Expression * lhs):op(op),lhs(lhs){}
-                virtual ret_ty emit(inp_ty) override {}
+                virtual ret_ty emit(inp_ty) override {
+                        std::wcerr << op.str << L"(";
+                        lhs->emit();
+                        std::wcerr << L")";
+                }
                 virtual NodeTy type() override { return NodeTy::UnOp; }
         };
         class Variable: public virtual Expression{
@@ -31,7 +42,9 @@ namespace Z{
                 ~Variable() override { }
                 virtual uint64_t reg()override{ return _reg; }
                 Variable(const Token& name):name(name){}
-                virtual ret_ty emit(inp_ty) override {}
+                virtual ret_ty emit(inp_ty) override {
+                        std::wcerr << name.str << L' ';
+                }
                 virtual NodeTy type() override { return NodeTy::Variable; }
         };
         class String: public virtual Expression{
@@ -41,7 +54,9 @@ namespace Z{
                 ~String() override { }
                 virtual uint64_t reg()override{ return _reg; }
                 String(const Token& value):value(value){}
-                virtual ret_ty emit(inp_ty) override {}
+                virtual ret_ty emit(inp_ty) override {
+                        std::wcerr << L"\"" << value.str << L"\"";
+                }
                 virtual NodeTy type() override { return NodeTy::String; }
         };
         class Number: public virtual Expression{
@@ -51,7 +66,9 @@ namespace Z{
                 ~Number() override { }
                 virtual uint64_t reg()override{ return _reg; }
                 Number(const Token& value):value(value){}
-                virtual ret_ty emit(inp_ty) override {}
+                virtual ret_ty emit(inp_ty) override {
+                        std::wcerr << value.str;
+                }
                 virtual NodeTy type() override { return NodeTy::Number; }
         };
         class Oper: public virtual Expression{
@@ -104,14 +121,14 @@ namespace Z{
                 ~Expr() override { delete expr; }
                 virtual uint64_t reg()override{ return _reg; }
                 Expr(Expression* expr):expr(expr){}
-                virtual ret_ty emit(inp_ty) override {}
+                virtual ret_ty emit(inp_ty) override { expr->emit(); }
                 virtual NodeTy type() override { return NodeTy::Expr; }
         };
         class AstNodeExpr: public virtual Expression{
                 uint64_t _reg = 0;
                 Expression* expr;
         public:
-                ~AstNodeExpr() override { delete expr; }
+                ~AstNodeExpr() override {/* if(expr)expr->FullRelease(); */}
                 virtual uint64_t reg()override{ return _reg; }
                 AstNodeExpr(Expression* expr):expr(expr){}
                 virtual ret_ty emit(inp_ty) override {}
@@ -125,7 +142,7 @@ namespace Z{
                 uint64_t _reg = 0;
                 Statement* stmt;
         public:
-                ~AstNode() override { delete stmt; }
+                ~AstNode() override { /*if(stmt)stmt->FullRelease();*/ }
                 virtual uint64_t reg()override{ return _reg; }
                 AstNode(Statement* stmt):stmt(stmt){}
                 virtual ret_ty emit(inp_ty) override {}

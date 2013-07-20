@@ -16,6 +16,7 @@ namespace Z{
                 Token& Last() const;
                 void   RetTokens(uint64_t num = 1) const;
                 void DefKw(const std::wstring&,SubTokTy ty, bool op = false) const;
+                bool eof() const;
         private:
                 const std::wstring code;
                 mutable std::vector<Token> cache;

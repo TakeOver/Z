@@ -83,7 +83,11 @@ namespace Z{
                 if(!lhs){
                         return nullptr;
                 }
-                return expectBinary(prec,lhs);
+                lhs = expectBinary(prec,lhs);
+                if(!lhs){
+                        return nullptr;
+                }
+                return new UnOp(op,lhs);
         }
         Expression* p::expectBinary(int64_t prec, Expression* lhs){
                 DBG_TRACE();
@@ -221,7 +225,7 @@ namespace Z{
         bool p::isSuccess(){ return !failed; }
         std::wstring p::ErrorMsg(){ if(isSuccess())return L"Ok!"; else return errMsg; }
 
-        void p::Parse(){delete expectStatement();}
+        Statement* p::Parse(){return expectStatement();}
 
         void p::setError(const std::wstring& msg, const Token& info){
                 errMsg = msg + L"[found:\'" + info.str + L"\'[ty:" + std::to_wstring((int)info.ty) + L"|sty:" + std::to_wstring((int)info.sty) + L"]] on line:" + std::to_wstring(info.line) + L" pos:" + std::to_wstring(info.pos);
