@@ -17,13 +17,14 @@ namespace Z{
                 
                 Expression*     expectExpression(); // +
                 Number*         expectNumber(); // +
-                Variable*       expectVariable(); // +
+                Expression*     expectVariable(bool = true); // +
  //               Lambda*         expectLambda();
+                Match*          expectMatch();
                 String*         expectString(); // +
                 Expression*     expectParen(); // +
                 Expression*     expectUnary();  // +
                 Expression*     expectBinary(int64_t prec, Expression*lhs); //+
-                Expression*     expectPrimary(); // +
+                Expression*     expectPrimary(bool =true); // +
                 Statement*      expectStatement();
                 void            _initTokenizer();
 

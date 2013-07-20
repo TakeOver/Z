@@ -13,6 +13,7 @@ namespace Z{
                 None = 0,
                 Colon,
                 Arrow,
+                Arrow2,
                 LParen,
                 RParen,
                 LBlock,
@@ -44,7 +45,8 @@ namespace Z{
                 ExprNode,
                 Quasi,
                 Oper,
-                Comma
+                Comma,
+                Match
         };
         struct Token{
                 mutable TokTy           ty = TokTy::None;

@@ -7,9 +7,9 @@ namespace Z{
         void p::_initTokenizer(){
                 #define tok(ty) Token(TokTy::None,L## #ty,0,0,ty)
                 tkn.DefKw(L"$::",SubTokTy::Quasi,true);
-                tkn.DefKw(L"expr",SubTokTy::ExprNode);
+                tkn.DefKw(L"expr!",SubTokTy::ExprNode,true);
                 tkn.DefKw(L"@::",SubTokTy:: ExprNode,true);
-                tkn.DefKw(L"stmt",SubTokTy:: Quasi);
+                tkn.DefKw(L"stmt!",SubTokTy:: Quasi,true);
                 defop(L"+",100);
                 defop(L"-",100);
                 defop(L"=",150);
@@ -31,9 +31,13 @@ namespace Z{
                 defop(L"||",150);
                 defop(L"~",150);
                 tkn.DefKw(L",",SubTokTy::Comma,true);
+                tkn.DefKw(L"match",SubTokTy::Match,true);
+                tkn.DefKw(L"let",SubTokTy::Let);
+                tkn.DefKw(L"->",SubTokTy::Arrow,true);
+                tkn.DefKw(L"=>",SubTokTy::Arrow2,true);
                 defop(L"[",150,SubTokTy::LSqParen,tok(SubTokTy::RSqParen));
                 tkn.DefKw(L"]",SubTokTy::RSqParen);
-                defop(L"{",150,SubTokTy::LBlock,tok(SubTokTy::RBlock));
+                tkn.DefKw(L"{",SubTokTy::LBlock);
                 tkn.DefKw(L"}",SubTokTy::RBlock);
                 #undef defop
                 #undef def
@@ -119,13 +123,22 @@ namespace Z{
                         lhs = new BinOp(binOp, lhs,rhs);
                 }
         }
-        Variable* p::expectVariable(){
+        Expression* p::expectVariable(bool lambda_possible){
                 DBG_TRACE();
                 auto res = new Variable(tkn.Last());
-                tkn.Next();
+                if(tkn.Next().sty == SubTokTy::Arrow && lambda_possible){
+                        DBG_TRACE("%s","lambda a->a parsing");
+                        tkn.Next();
+                        auto body = expectExpression();
+                        if(!body){
+                                delete res;
+                                return nullptr;
+                        }
+                        return new Lambda(body,new VecHelper<Variable>({res}));
+                }
                 return res;
         }
-        Expression* p::expectPrimary(){
+        Expression* p::expectPrimary(bool lambda_possible){
                 DBG_TRACE();
                 auto tok = tkn.Last();
                 auto ty = tok.ty;
@@ -133,11 +146,12 @@ namespace Z{
                 switch(ty){
                         case TokTy::Number: return expectNumber();
                         case TokTy::String: return expectString();
-                        case TokTy::Identifer: return expectVariable();
+                        case TokTy::Identifer: return expectVariable(lambda_possible);
                         case TokTy::Operator: {
                                 switch(sty){
                                         case SubTokTy::LParen: return expectParen();
                                         //case SubTokTy::LSqParen LBlock;
+                                        case SubTokTy::Match: return expectMatch();
                                         case SubTokTy::Quasi:{
                                                 tkn.Next();
                                                 auto tmp = expectStatement();
@@ -165,11 +179,13 @@ namespace Z{
                 DBG_TRACE();
                 tkn.Next(); // eat (
                 auto res = expectExpression();
-                if(tkn.Last().sty!=SubTokTy::RParen){
+                if(tkn.Last().sty!=SubTokTy::RParen){ // tuple or lambda arrow notation
+                        DBG_TRACE("%s","try lambda or tuple");
                         if(tkn.Last().sty == SubTokTy::Comma){
                                 std::vector<Expression*> vec;
                                 vec.push_back(res);
                                 while(tkn.Last().sty == SubTokTy::Comma){
+                                        tkn.Next();
                                         res = expectExpression();
                                         if(!res){
                                                 for(auto&x:vec)x->FullRelease();
@@ -178,11 +194,11 @@ namespace Z{
                                         vec.push_back(res);
                                 }
                                 if(tkn.Last().sty!=SubTokTy::RParen){
-                                        setError(L"LParen expected[0]", tkn.Last());
+                                        setError(L"RParen expected[0]", tkn.Last());
                                         for(auto&x:vec)x->FullRelease();
                                         return nullptr;
                                 }
-                                if(tkn.Next().sty == SubTokTy::Arrow){
+                                if(tkn.Next().sty == SubTokTy::Arrow){ // (a,b...)->expr
                                         tkn.Next();
                                         auto body = expectExpression();
                                         if(!body){
@@ -198,16 +214,33 @@ namespace Z{
                                                 }
                                                 varvec.push_back(dynamic_cast<Variable*>(x));
                                         }
-                                        return new Lambda(new Expr2Stmt(body),new VecHelper<Variable>(varvec));
+                                        return new Lambda((body),new VecHelper<Variable>(varvec));
                                 }
-                                return new Tuple(new VecHelper<Expression>(vec));
+                                setError(L"Arrow expected", tkn.Last());
+                                for(auto&x:vec)x->FullRelease();
+                                return nullptr;
                         }
-                        setError(L"LParen expected[1]", tkn.Last());
+                        setError(L"RParen expected[1]", tkn.Last());
                         res->FullRelease();
                         return nullptr;
                 }
-                tkn.Next();
-                return res;
+                if(tkn.Next().sty == SubTokTy::Arrow){ // lambda arrow notation. (a)-> expr
+                        if(res->type()!=NodeTy::Variable){
+                                res->FullRelease();
+                                setError(L"Variable expected in lambda",tkn.Last());
+                                return nullptr;
+                        }
+                        std::vector<Variable*> varvec;
+                        varvec.push_back(dynamic_cast<Variable*>(res));
+                        tkn.Next();
+                        auto body = expectExpression();
+                        if(!body){
+                                res->FullRelease();
+                                return nullptr;
+                        }
+                        return new Lambda((body),new VecHelper<Variable>(varvec));
+                }
+                return res; // simple (expr)
         }
         int64_t p::op_prec(const std::wstring& str){
                 if(op_precedence.find(str)==op_precedence.end()){
@@ -230,5 +263,57 @@ namespace Z{
         void p::setError(const std::wstring& msg, const Token& info){
                 errMsg = msg + L"[found:\'" + info.str + L"\'[ty:" + std::to_wstring((int)info.ty) + L"|sty:" + std::to_wstring((int)info.sty) + L"]] on line:" + std::to_wstring(info.line) + L" pos:" + std::to_wstring(info.pos);
                 failed = true; 
+        }
+        Match* p::expectMatch(){
+                tkn.Next();
+                auto expr = expectExpression();
+                if(!expr){
+                        return nullptr;
+                }
+                if(tkn.Last().sty!=SubTokTy::LBlock){
+                        expr->FullRelease();
+                        setError(L"{ expected in match expr",tkn.Last());
+                        return nullptr;
+                }
+                tkn.Next();
+                std::vector<Expression*> cond;
+                std::vector<Expression*> res;
+                while(tkn.Last().sty!=SubTokTy::RBlock && !tkn.eof()){
+                        auto _cond = expectExpression();
+                        if(!_cond){
+                                for(auto&x:cond)x->FullRelease();
+                                for(auto&x:res)x->FullRelease();
+                                expr->FullRelease();
+                                return nullptr;
+                        }
+                        if(tkn.Last().sty!=SubTokTy::Arrow2){
+                                for(auto&x:cond)x->FullRelease();
+                                for(auto&x:res)x->FullRelease();
+                                expr->FullRelease();
+                                return nullptr;                                
+                        }
+                        tkn.Next();
+                        auto _res = expectExpression();
+                        if(!_res){
+                                for(auto&x:cond)x->FullRelease();
+                                for(auto&x:res)x->FullRelease();
+                                expr->FullRelease();
+                                _cond->FullRelease();
+                                return nullptr;
+                        }
+                        cond.push_back(_cond);
+                        res.push_back(_res);
+                }
+                if(tkn.Last().sty!=SubTokTy::RBlock){
+                                for(auto&x:cond)x->FullRelease();
+                                for(auto&x:res)x->FullRelease();
+                                expr->FullRelease();
+                                setError(L"} expected in match expr",tkn.Last());
+                                return nullptr;                        
+                }
+                tkn.Next();
+                return new Match((expr), new VecHelper<Expression>(cond), new VecHelper<Expression>(res));
+
+
         }
 }

@@ -43,7 +43,7 @@ namespace Z{
                 virtual uint64_t reg()override{ return _reg; }
                 Variable(const Token& name):name(name){}
                 virtual ret_ty emit(inp_ty) override {
-                        std::wcerr << name.str << L' ';
+                        std::wcerr << name.str;
                 }
                 virtual NodeTy type() override { return NodeTy::Variable; }
         };
@@ -83,13 +83,21 @@ namespace Z{
         };
         class Lambda: public virtual Expression{
                 uint64_t _reg = 0;
-                Statement* body;
+                Expression* body;
                 VecHelper<Variable>* args;
         public:
                 ~Lambda() override { delete args; delete body; }
                 virtual uint64_t reg()override{ return _reg; }
-                Lambda(Statement * body, VecHelper<Variable> *args):body(body),args(args){}
-                virtual ret_ty emit(inp_ty) override {}
+                Lambda(Expression * body, VecHelper<Variable> *args):body(body),args(args){}
+                virtual ret_ty emit(inp_ty) override {
+                        std::wcerr << L"lambda!( ";
+                        for(auto&x:args->get()){
+                                x->emit();
+                                std::wcerr << L" ";
+                        }
+                        std::wcerr << L")->";
+                        body->emit();
+                }
                 virtual NodeTy type() override { return NodeTy::Lambda; }
         };
         class FCall: public virtual Expression{
@@ -102,16 +110,6 @@ namespace Z{
                 FCall(Expression * func, VecHelper<Expression> *args):func(func),args(args){}
                 virtual ret_ty emit(inp_ty) override {}
                 virtual NodeTy type() override { return NodeTy::FCall; }
-        };
-        class Tuple: public virtual Expression{
-                uint64_t _reg = 0;
-                VecHelper<Expression>* args;
-        public:
-                ~Tuple() override { delete args; }
-                virtual uint64_t reg()override{ return _reg; }
-                Tuple(VecHelper<Expression> *args):args(args){}
-                virtual ret_ty emit(inp_ty) override {}
-                virtual NodeTy type() override { return NodeTy::Tuple; }
         };
 
         class Expr: public virtual Expression{
@@ -131,7 +129,11 @@ namespace Z{
                 ~AstNodeExpr() override {/* if(expr)expr->FullRelease(); */}
                 virtual uint64_t reg()override{ return _reg; }
                 AstNodeExpr(Expression* expr):expr(expr){}
-                virtual ret_ty emit(inp_ty) override {}
+                virtual ret_ty emit(inp_ty) override {
+                        std::wcerr << L"expr!(";
+                        expr->emit();
+                        std::wcerr << L")";
+                }
                 virtual NodeTy type() override { return NodeTy::AstNodeExpr; }
                 virtual void FullRelease() override { 
                         expr->FullRelease(); 
@@ -145,11 +147,39 @@ namespace Z{
                 ~AstNode() override { /*if(stmt)stmt->FullRelease();*/ }
                 virtual uint64_t reg()override{ return _reg; }
                 AstNode(Statement* stmt):stmt(stmt){}
-                virtual ret_ty emit(inp_ty) override {}
+                virtual ret_ty emit(inp_ty) override {                        
+                        std::wcerr << L"stmt!(";
+                        stmt->emit();
+                        std::wcerr << L")";
+                }
                 virtual NodeTy type() override { return NodeTy::AstNode; }
                 virtual void FullRelease() override { 
                         stmt->FullRelease(); 
                         delete this; 
                 }
+        };
+        class Match: public virtual Expression{
+                uint64_t _reg = 0;
+                Expression* what;
+                VecHelper<Expression> *cond;
+                VecHelper<Expression> *res;
+        public:
+                ~Match() override { delete cond; delete res;what->FullRelease(); }
+                virtual uint64_t reg()override{ return _reg; }
+                Match(Expression*what, decltype(cond) cond, decltype(res) res):what(what),cond(cond),res(res){}
+                virtual ret_ty emit(inp_ty) override {     
+                        std::wcerr << L"match!("; what->emit(); std::wcerr << L"){\n";
+                        for(auto i1 = cond->get().begin(), 
+                                 i2 = res->get().begin(), 
+                                 e1 = cond->get().end(), 
+                                 e2 = res->get().end();
+                                 i1!=e1 && i2!=e2; 
+                                 ++i1,++i2){
+                                std::wcerr << L"\t|"; (*i1)->emit(); std::wcerr << L"->"; (*i2)->emit();
+                                std::wcerr << L'\n';
+                        }
+                        std::wcerr << L"}";
+                }
+                virtual NodeTy type() override { return NodeTy::Match; }
         };
 }

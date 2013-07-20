@@ -21,8 +21,7 @@ namespace Z{
                 Oper,
                 AstNodeExpr,
                 AstNode,
-                Expr2Stmt,
-                Tuple
+                Expr2Stmt
         };
         class Statement {
         public:
@@ -58,6 +57,6 @@ namespace Z{
                 VecHelper(const std::vector<K*>& v):container(v){}
                 virtual ret_ty emit(inp_ty) override {}
                 virtual NodeTy type() override { return NodeTy::VecHelper; }
-                std::vector<K*>& get()const{return container;}
+                std::vector<K*>& get(){return container;}
         };
 }
