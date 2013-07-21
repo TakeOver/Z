@@ -32,7 +32,8 @@ namespace Z{
                 defop(L"~",150);
                 tkn.DefKw(L",",SubTokTy::Comma,true);
                 tkn.DefKw(L"match",SubTokTy::Match,true);
-                tkn.DefKw(L"let",SubTokTy::Let);
+                tkn.DefKw(L"let",SubTokTy::Let,true);
+                tkn.DefKw(L"var",SubTokTy::Var,true);
                 tkn.DefKw(L"->",SubTokTy::Arrow,true);
                 tkn.DefKw(L"=>",SubTokTy::Arrow2,true);
                 defop(L"[",150,SubTokTy::LSqParen,tok(SubTokTy::RSqParen));
@@ -138,6 +139,25 @@ namespace Z{
                 }
                 return res;
         }
+        Expression* p::expectBlock(){
+                tkn.Next();
+                std::vector<Expression*> block;
+                while(tkn.Last().sty!=SubTokTy::RBlock && !tkn.eof()){
+                        Expression* expr = expectExpression();
+                        if(!expr){
+                                for(auto&x:block)x->FullRelease();
+                                return nullptr;
+                        }
+                        block.push_back(expr);
+                }
+                if(tkn.Last().sty!=SubTokTy::RBlock){
+                        for(auto&x:block)x->FullRelease();
+                        setError(L"} expected in block",tkn.Last());
+                        return nullptr;
+                }
+                tkn.Next();
+                return new Block(new VecHelper<Expression>(block));
+        }
         Expression* p::expectPrimary(bool lambda_possible){
                 DBG_TRACE();
                 auto tok = tkn.Last();
@@ -168,12 +188,48 @@ namespace Z{
                                                 }
                                                 return new AstNodeExpr(tmp);
                                         }
+                                        case SubTokTy::LBlock: return expectBlock();
                                         case SubTokTy::Oper: return expectUnary();
+                                        case SubTokTy::Let: return expectLet();
+                                        case SubTokTy::Var: return expectVar();
                                         default: setError(L"Primary expected[0]",tok); return nullptr;
                                 }
                         }
                         default: setError(L"Primary expected[1]",tok); return nullptr;
                 }
+        }
+        Expression* p::expectLet(){
+                auto name = tkn.Next();
+                if(name.ty!=TokTy::Identifer){
+                        setError(L"Identifer expected in let",name);
+                        return nullptr;
+                }
+                if(tkn.Next().str!=L"="){
+                        setError(L"Assign expected in let", tkn.Last());
+                        return nullptr;
+                }
+                tkn.Next();
+                auto value = expectExpression();
+                if(!value){
+                        return nullptr;
+                }
+                return new Let(name,value);
+        }
+        Expression* p::expectVar(){
+                auto name = tkn.Next();
+                if(name.ty!=TokTy::Identifer){
+                        setError(L"Identifer expected in var",name);
+                        return nullptr;
+                }
+                if(tkn.Next().str!=L"="){
+                        return new Var(name,nullptr);
+                }
+                tkn.Next();
+                auto value = expectExpression();
+                if(!value){
+                        return nullptr;
+                }
+                return new Var(name,value);
         }
         Expression* p::expectParen(){
                 DBG_TRACE();

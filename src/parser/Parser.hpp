@@ -26,6 +26,9 @@ namespace Z{
                 Expression*     expectBinary(int64_t prec, Expression*lhs); //+
                 Expression*     expectPrimary(bool =true); // +
                 Statement*      expectStatement();
+                Expression*     expectBlock();
+                Expression*     expectLet();
+                Expression*     expectVar();
                 void            _initTokenizer();
 
                 mutable bool failed = false;

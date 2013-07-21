@@ -21,7 +21,10 @@ namespace Z{
                 Oper,
                 AstNodeExpr,
                 AstNode,
-                Expr2Stmt
+                Expr2Stmt,
+                Block,
+                Let,
+                Var
         };
         class Statement {
         public:

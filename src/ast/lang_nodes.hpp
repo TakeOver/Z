@@ -182,4 +182,52 @@ namespace Z{
                 }
                 virtual NodeTy type() override { return NodeTy::Match; }
         };
+        class Block: public virtual Expression{
+                uint64_t _reg = 0;
+                VecHelper<Expression>* block;
+        public:
+                ~Block() override { /*if(block)block->FullRelease();*/ }
+                virtual uint64_t reg()override{ return _reg; }
+                Block(VecHelper<Expression>* block):block(block){}
+                virtual ret_ty emit(inp_ty) override {                        
+                        std::wcerr << L"{\n";
+                        for(auto&x:block->get()){
+                                std::wcerr << L'\t';
+                                x->emit();
+                                std::wcerr << L'\n';
+                        }
+                        std::wcerr << L"}";
+                }
+                virtual NodeTy type() override { return NodeTy::Block; }
+                virtual void FullRelease() override { 
+                        block->FullRelease(); 
+                        delete this; 
+                }
+        };
+        class Let: public virtual Expression{
+                uint64_t _reg = 0;
+                Token name;
+                Expression* value;
+        public:
+                ~Let() override { value->FullRelease(); }
+                virtual uint64_t reg()override{ return _reg; }
+                Let(const Token& name, Expression* value):name(name),value(value){}
+                virtual ret_ty emit(inp_ty) override { 
+                        std::wcerr << L"let "<< name.str << L" = "; value->emit();
+                }
+                virtual NodeTy type() override { return NodeTy::Let; }
+        };
+        class Var: public virtual Expression{
+                uint64_t _reg = 0;
+                Token name;
+                Expression* value;
+        public:
+                ~Var() override { value->FullRelease(); }
+                virtual uint64_t reg()override{ return _reg; }
+                Var(const Token& name, Expression* value):name(name),value(value){}
+                virtual ret_ty emit(inp_ty) override { 
+                        std::wcerr << L"var "<< name.str << L" = "; if(value)value->emit();else std::wcerr << L"nil";
+                }
+                virtual NodeTy type() override { return NodeTy::Var; }
+        };
 }
