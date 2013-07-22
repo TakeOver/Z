@@ -2,6 +2,8 @@
 #include <iostream>
 #include "basic_node.hpp"
 #include "../tokenizer/Token.hpp"
+#include <fstream>
+#include <cstring>
 namespace Z{
         class BinOp: public virtual Expression{
                 uint64_t _reg = 0;
@@ -181,6 +183,40 @@ namespace Z{
                         return expr->eval(ctx);
                 }
                 virtual NodeTy type() override { return NodeTy::Expr; }
+        };
+        class Import: public virtual Expression{
+                uint64_t _reg = 0;
+                Token module;
+        public:
+                ~Import() override {}
+                virtual uint64_t reg()override{ return _reg; }
+                Import(const Token& module):module(module){}
+                virtual ret_ty emit(inp_ty) override { std::wcerr << L"import " << module.str; }
+                virtual Value eval(Context*ctx)override{
+                        char * name = new char[module.str.length()*4+10];
+                        wcstombs(name, module.str.c_str(), module.str.length()*4+1);
+                        strcpy(name+strlen(name),".z\0");
+                        std::wifstream in (name);
+                        delete [] name;
+                        if(!in){
+                                std::wcerr << L"Failed to load module " << module.str << L".z\n";
+                                return ctx->null;
+                        }
+                        extern Expression* Parse(const std::wstring&);
+                        std::wstring buf,tmp;
+                        while(!in.eof()){
+                                std::getline(in,tmp);
+                                buf+= tmp + L"\n";
+                        }
+                        in.close();
+                        auto expr = Parse(std::wstring(buf));
+                        if(!expr){
+                                return ctx->null;
+                        }
+                        return expr->eval(ctx);
+
+                }
+                virtual NodeTy type() override { return NodeTy::Import; }
         };
         class AstNodeExpr: public virtual Expression{
                 uint64_t _reg = 0;

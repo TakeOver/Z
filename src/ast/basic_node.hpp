@@ -26,7 +26,8 @@ namespace Z{
                 Block,
                 Let,
                 Var,
-                EvalExpr
+                EvalExpr,
+                Import
         };
         class Statement {
         public:

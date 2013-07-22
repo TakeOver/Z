@@ -1,6 +1,9 @@
 #include "Parser.hpp"
 #include <iostream>
 using namespace Z;
+namespace Z{Expression* Parse(const std::wstring& s){
+        return Parser(s).Parse();
+}}
 int main(){
         std::wstring str,tmp;
         while(!std::cin.eof()){

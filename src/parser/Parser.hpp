@@ -10,7 +10,7 @@ namespace Z{
                 ~Parser();
                 bool            isSuccess();
                 std::wstring    ErrorMsg();
-                Statement*      Parse();
+                Expression*     Parse();
                 
         private:
                 mutable Tokenizer tkn;
@@ -29,6 +29,7 @@ namespace Z{
                 Expression*     expectBlock();
                 Expression*     expectLet();
                 Expression*     expectVar();
+                Expression*     expectImport();
                 void            _initTokenizer();
 
                 mutable bool failed = false;

@@ -33,6 +33,7 @@ namespace Z{
                 tkn.DefKw(L",",SubTokTy::Comma,true);
                 tkn.DefKw(L"eval",SubTokTy::Eval,true);
                 tkn.DefKw(L"match",SubTokTy::Match,true);
+                tkn.DefKw(L"import",SubTokTy::Import,true);
                 tkn.DefKw(L"let",SubTokTy::Let,true);
                 tkn.DefKw(L"var",SubTokTy::Var,true);
                 tkn.DefKw(L"->",SubTokTy::Arrow,true);
@@ -67,6 +68,15 @@ namespace Z{
                 auto res = new Number(tkn.Last());
                 tkn.Next();
                 return res;
+        }
+        Expression* p::expectImport(){
+                auto module = tkn.Next();
+                tkn.Next();
+                if(module.ty!=TokTy::Identifer){
+                        setError(L"Indetifer expected in import",module);
+                        return nullptr;
+                }
+                return new Import(module);
         }
         Expression* p::expectExpression(){
                 DBG_TRACE();
@@ -239,6 +249,7 @@ namespace Z{
                                         case SubTokTy::Oper: return expectUnary();
                                         case SubTokTy::Let: return expectLet();
                                         case SubTokTy::Var: return expectVar();
+                                        case SubTokTy::Import: return expectImport();
                                         default: setError(L"Primary expected[0]",tok); return nullptr;
                                 }
                         }
@@ -361,7 +372,7 @@ namespace Z{
         bool p::isSuccess(){ return !failed; }
         std::wstring p::ErrorMsg(){ if(isSuccess())return L"Ok!"; else return errMsg; }
 
-        Statement* p::Parse(){return expectStatement();}
+        Expression* p::Parse(){return expectExpression();}
 
         void p::setError(const std::wstring& msg, const Token& info){
                 errMsg = msg + L"[found:\'" + info.str + L"\'[ty:" + std::to_wstring((int)info.ty) + L"|sty:" + std::to_wstring((int)info.sty) + L"]] on line:" + std::to_wstring(info.line) + L" pos:" + std::to_wstring(info.pos);
