@@ -31,6 +31,7 @@ namespace Z{
                 defop(L"||",150);
                 defop(L"~",150);
                 tkn.DefKw(L",",SubTokTy::Comma,true);
+                tkn.DefKw(L"eval",SubTokTy::Eval,true);
                 tkn.DefKw(L"match",SubTokTy::Match,true);
                 tkn.DefKw(L"let",SubTokTy::Let,true);
                 tkn.DefKw(L"var",SubTokTy::Var,true);
@@ -38,7 +39,7 @@ namespace Z{
                 tkn.DefKw(L"=>",SubTokTy::Arrow2,true);
                 defop(L"[",150,SubTokTy::LSqParen,tok(SubTokTy::RSqParen));
                 tkn.DefKw(L"]",SubTokTy::RSqParen);
-                tkn.DefKw(L"{",SubTokTy::LBlock);
+                tkn.DefKw(L"{",SubTokTy::LBlock,true);
                 tkn.DefKw(L"}",SubTokTy::RBlock);
                 #undef defop
                 #undef def
@@ -108,10 +109,44 @@ namespace Z{
                                 lhs->FullRelease();
                                 return nullptr;
                         }
-                        Expression* rhs = expectPrimary();
-                        if (!rhs){
-                                lhs->FullRelease();
-                                return nullptr;
+                        Expression* rhs;
+
+                        if(follows_oper.find(binOp.sty)!=follows_oper.end()){
+                                if(binOp.sty == SubTokTy::LParen){
+                                        std::vector<Expression*> tmp;
+                                        while(!tkn.eof() && tkn.Last().sty!=SubTokTy::RParen){
+                                                auto expr = expectExpression();
+                                                if(!expr){
+                                                        for(auto&x:tmp){
+                                                                x->FullRelease();
+                                                        }
+                                                        return nullptr;
+                                                }
+                                                tmp.push_back(expr);
+
+                                                if(tkn.Last().sty == SubTokTy::Comma){
+                                                        tkn.Next();
+                                                }else{
+                                                        break;
+                                                }
+                                        }
+                                        rhs = new VecHelper<Expression>(tmp);
+                                }else{
+                                        rhs = expectExpression();
+                                }
+                                auto next = follows_oper[binOp.sty];
+                                if(tkn.Last().sty!=next.sty){
+                                        rhs->FullRelease();
+                                        setError(L"Expected suboper in binary expr(" + next.str + L")",tkn.Last());
+                                        return nullptr;
+                                }
+                                tkn.Next();
+                        }else{
+                                rhs = expectPrimary();
+                                if (!rhs){
+                                        lhs->FullRelease();
+                                        return nullptr;
+                                }
                         }
                         int64_t nextprec = op_prec(tkn.Last().str);
                         if (opprec < nextprec) {
@@ -121,7 +156,11 @@ namespace Z{
                                         return nullptr;
                                 }
                         }
-                        lhs = new BinOp(binOp, lhs,rhs);
+                        if(binOp.sty == SubTokTy::LParen){
+                                lhs = new FCall(lhs,dynamic_cast<VecHelper<Expression>*>(rhs));
+                        }else{
+                                lhs = new BinOp(binOp, lhs,rhs);
+                        }
                 }
         }
         Expression* p::expectVariable(bool lambda_possible){
@@ -187,6 +226,14 @@ namespace Z{
                                                         return nullptr;
                                                 }
                                                 return new AstNodeExpr(tmp);
+                                        }
+                                        case SubTokTy::Eval:{
+                                                tkn.Next();
+                                                auto expr = expectExpression();
+                                                if(!expr){
+                                                        return nullptr;
+                                                }
+                                                return new EvalExpr(expr);
                                         }
                                         case SubTokTy::LBlock: return expectBlock();
                                         case SubTokTy::Oper: return expectUnary();

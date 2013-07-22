@@ -46,7 +46,8 @@ namespace Z{
                 Quasi,
                 Oper,
                 Comma,
-                Match
+                Match,
+                Eval
         };
         struct Token{
                 mutable TokTy           ty = TokTy::None;

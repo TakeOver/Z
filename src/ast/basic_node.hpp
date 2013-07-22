@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <vector>
+#include "../codegen/Context.hpp"
 namespace Z{
         #define ret_ty void
         #define inp_ty void
@@ -24,12 +25,14 @@ namespace Z{
                 Expr2Stmt,
                 Block,
                 Let,
-                Var
+                Var,
+                EvalExpr
         };
         class Statement {
         public:
                 virtual ~Statement(){}
                 virtual ret_ty emit(inp_ty) = 0;
+                virtual Value eval(Context*) = 0;
                 virtual NodeTy type() = 0; 
                 virtual void FullRelease() { delete this; }
         };
@@ -39,6 +42,7 @@ namespace Z{
                 virtual ~Expression(){}
                 virtual ret_ty emit(inp_ty) = 0;
                 virtual uint64_t reg() = 0;
+                virtual Value eval(Context*) = 0;
                 virtual NodeTy type() = 0; 
                 virtual void FullRelease() { delete this; }
         };
@@ -48,6 +52,9 @@ namespace Z{
                 ~Expr2Stmt() override { /*if(expr)expr->FullRelease();*/ }
                 Expr2Stmt(Expression * expr):expr(expr){}
                 virtual ret_ty emit(inp_ty) override {expr->emit();}
+                virtual Value eval(Context* ctx){
+                        return expr->eval(ctx);
+                }
                 virtual NodeTy type() override { return NodeTy::Expr2Stmt; }
 
         };
@@ -59,6 +66,7 @@ namespace Z{
                 virtual uint64_t reg()override{ return _reg; }
                 VecHelper(const std::vector<K*>& v):container(v){}
                 virtual ret_ty emit(inp_ty) override {}
+                virtual Value eval(Context* ctx){ return ctx->null; };
                 virtual NodeTy type() override { return NodeTy::VecHelper; }
                 std::vector<K*>& get(){return container;}
         };
