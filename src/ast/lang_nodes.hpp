@@ -6,11 +6,9 @@
 #include <cstring>
 namespace Z{
         class Variable: public virtual Expression{
-                uint64_t _reg = 0;//since I want SSA - bytecode would be like - getvar %reg %name
         public:
                 Token name;
                 ~Variable() override { }
-                virtual uint64_t reg()override{ return _reg; }
                 Variable(const Token& name):name(name){}
                 virtual ret_ty emit(inp_ty) override {
                         std::wcerr << name.str;
@@ -22,12 +20,10 @@ namespace Z{
                 std::wstring getname(){ return name.str; }
         };
         class BinOp: public virtual Expression{
-                uint64_t _reg = 0;
                 Token op;
                 Expression * lhs, * rhs;
         public:
                 ~BinOp() override { delete lhs; delete rhs; }
-                virtual uint64_t reg()override{ return _reg; }
                 BinOp(const Token& op, Expression * lhs, Expression * rhs):op(op),lhs(lhs),rhs(rhs){}
                 virtual ret_ty emit(inp_ty) override {
                         std::wcerr << L"(";
@@ -65,12 +61,10 @@ namespace Z{
                 virtual NodeTy type() override { return NodeTy::BinOp; }
         };
         class UnOp: public virtual Expression{
-                uint64_t _reg = 0;
                 Token op;
                 Expression * lhs;
         public:
                 ~UnOp() override { delete lhs; }
-                virtual uint64_t reg()override{ return _reg; }
                 UnOp(const Token& op, Expression * lhs):op(op),lhs(lhs){}
                 virtual ret_ty emit(inp_ty) override {
                         std::wcerr << op.str << L"(";
@@ -91,11 +85,9 @@ namespace Z{
                 virtual NodeTy type() override { return NodeTy::UnOp; }
         };
         class String: public virtual Expression{
-                uint64_t _reg = 0;
                 Token value;
         public:
                 ~String() override { }
-                virtual uint64_t reg()override{ return _reg; }
                 String(const Token& value):value(value){}
                 virtual ret_ty emit(inp_ty) override {
                         std::wcerr << L"\"" << value.str << L"\"";
@@ -106,11 +98,9 @@ namespace Z{
                 virtual NodeTy type() override { return NodeTy::String; }
         };
         class Boolean: public virtual Expression{
-                uint64_t _reg = 0;
                 bool value;
         public:
                 ~Boolean() override { }
-                virtual uint64_t reg()override{ return _reg; }
                 Boolean(bool value):value(value){}
                 virtual ret_ty emit(inp_ty) override {
                         std::wcerr << (value?L" true ":L" false ");
@@ -120,12 +110,39 @@ namespace Z{
                 }
                 virtual NodeTy type() override { return NodeTy::Boolean; }
         };
+        class Nil: public virtual Expression{
+        public:
+                ~Nil() override { }
+                Nil(){}
+                virtual ret_ty emit(inp_ty) override {
+                        std::wcerr << (L"nil");
+                }
+                virtual Value eval(Context*ctx)override{
+                        return Value();       
+                }
+                virtual NodeTy type() override { return NodeTy::Nil; }
+        };
+        class Export: public virtual Expression{
+                Token variable;
+        public:
+                ~Export() override { }
+                Export(const Token& variable):variable(variable){}
+                virtual ret_ty emit(inp_ty) override {
+                        std::wcerr << (L"export") << variable.str;
+                }
+                virtual Value eval(Context*ctx)override{
+                        auto val = ctx->getVar(variable.str);
+                        ctx = ctx->getRoot();
+                        ctx->createVar(variable.str);
+                        ctx->setVar(variable.str, val);
+                        return val;
+                }
+                virtual NodeTy type() override { return NodeTy::Export; }
+        };
         class Number: public virtual Expression{
-                uint64_t _reg = 0;
                 Token value;
         public:
                 ~Number() override { }
-                virtual uint64_t reg()override{ return _reg; }
                 Number(const Token& value):value(value){}
                 virtual ret_ty emit(inp_ty) override {
                         std::wcerr << value.str;
@@ -136,22 +153,18 @@ namespace Z{
                 virtual NodeTy type() override { return NodeTy::Number; }
         };
         class Oper: public virtual Expression{
-                uint64_t _reg = 0;
                 Token value;
         public:
                 ~Oper() override { }
-                virtual uint64_t reg()override{ return _reg; }
                 Oper(const Token& value):value(value){}
                 virtual ret_ty emit(inp_ty) override {}
                 virtual NodeTy type() override { return NodeTy::Oper; }
         };
         class Lambda: public virtual Expression{
-                uint64_t _reg = 0;
                 Expression* body;
                 VecHelper<Variable>* args;
         public:
                 ~Lambda() override { delete args; delete body; }
-                virtual uint64_t reg()override{ return _reg; }
                 Lambda(Expression * body, VecHelper<Variable> *args):body(body),args(args){}
                 virtual ret_ty emit(inp_ty) override {
                         std::wcerr << L"lambda!( ";
@@ -170,12 +183,10 @@ namespace Z{
                 virtual NodeTy type() override { return NodeTy::Lambda; }
         };
         class FCall: public virtual Expression{
-                uint64_t _reg = 0;
                 Expression* func;
                 VecHelper<Expression>* args;
         public:
                 ~FCall() override { delete args; delete func; }
-                virtual uint64_t reg()override{ return _reg; }
                 FCall(Expression * func, VecHelper<Expression> *args):func(func),args(args){}
                 virtual ret_ty emit(inp_ty) override {
                         func->emit();
@@ -211,11 +222,9 @@ namespace Z{
         };
 
         class Expr: public virtual Expression{
-                uint64_t _reg = 0;
                 Expression* expr;
         public:
                 ~Expr() override { delete expr; }
-                virtual uint64_t reg()override{ return _reg; }
                 Expr(Expression* expr):expr(expr){}
                 virtual ret_ty emit(inp_ty) override { expr->emit(); }
                 virtual Value eval(Context*ctx)override{
@@ -224,11 +233,9 @@ namespace Z{
                 virtual NodeTy type() override { return NodeTy::Expr; }
         };
         class Import: public virtual Expression{
-                uint64_t _reg = 0;
                 Token module;
         public:
                 ~Import() override {}
-                virtual uint64_t reg()override{ return _reg; }
                 Import(const Token& module):module(module){}
                 virtual ret_ty emit(inp_ty) override { std::wcerr << L"import " << module.str; }
                 virtual Value eval(Context*ctx)override{
@@ -258,11 +265,9 @@ namespace Z{
                 virtual NodeTy type() override { return NodeTy::Import; }
         };
         class AstNodeExpr: public virtual Expression{
-                uint64_t _reg = 0;
                 Expression* expr;
         public:
                 ~AstNodeExpr() override {}
-                virtual uint64_t reg()override{ return _reg; }
                 AstNodeExpr(Expression* expr):expr(expr){}
                 virtual ret_ty emit(inp_ty) override {
                         std::wcerr << L"expr!(";
@@ -280,11 +285,9 @@ namespace Z{
                 }
         };
         class EvalExpr: public virtual Expression{
-                uint64_t _reg = 0;
                 Expression* expr;
         public:
                 ~EvalExpr() override { }
-                virtual uint64_t reg()override{ return _reg; }
                 EvalExpr(Expression* expr):expr(expr){}
                 virtual ret_ty emit(inp_ty) override {                        
                         std::wcerr << L"eval!(";
@@ -305,13 +308,11 @@ namespace Z{
                 }
         };
         class Match: public virtual Expression{
-                uint64_t _reg = 0;
                 Expression* what;
                 VecHelper<Expression> *cond;
                 VecHelper<Expression> *res;
         public:
                 ~Match() override { delete cond; delete res;what->FullRelease(); }
-                virtual uint64_t reg()override{ return _reg; }
                 Match(Expression*what, decltype(cond) cond, decltype(res) res):what(what),cond(cond),res(res){}
                 virtual ret_ty emit(inp_ty) override {     
                         std::wcerr << L"match!("; what->emit(); std::wcerr << L"){\n";
@@ -340,11 +341,9 @@ namespace Z{
                 virtual NodeTy type() override { return NodeTy::Match; }
         };
         class Block: public virtual Expression{
-                uint64_t _reg = 0;
                 VecHelper<Expression>* block;
         public:
                 ~Block() override { /*if(block)block->FullRelease();*/ }
-                virtual uint64_t reg()override{ return _reg; }
                 Block(VecHelper<Expression>* block):block(block){}
                 virtual ret_ty emit(inp_ty) override {                        
                         std::wcerr << L"{\n";
@@ -371,12 +370,10 @@ namespace Z{
                 }
         };
         class Let: public virtual Expression{
-                uint64_t _reg = 0;
                 Token name;
                 Expression* value;
         public:
                 ~Let() override { value->FullRelease(); }
-                virtual uint64_t reg()override{ return _reg; }
                 Let(const Token& name, Expression* value):name(name),value(value){}
                 virtual ret_ty emit(inp_ty) override { 
                         std::wcerr << L"let "<< name.str << L" = "; value->emit();
@@ -390,12 +387,10 @@ namespace Z{
                 virtual NodeTy type() override { return NodeTy::Let; }
         };
         class Var: public virtual Expression{
-                uint64_t _reg = 0;
                 Token name;
                 Expression* value;
         public:
                 ~Var() override { value->FullRelease(); }
-                virtual uint64_t reg()override{ return _reg; }
                 Var(const Token& name, Expression* value):name(name),value(value){}
                 virtual ret_ty emit(inp_ty) override { 
                         std::wcerr << L"var "<< name.str << L" = "; if(value)value->emit();else std::wcerr << L"nil";

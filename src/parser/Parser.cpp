@@ -34,9 +34,11 @@ namespace Z{
                 tkn.DefKw(L",",SubTokTy::Comma,true);
                 tkn.DefKw(L";",SubTokTy::Semicolon,true);
                 tkn.DefKw(L"eval",SubTokTy::Eval,true);
+                tkn.DefKw(L"export",SubTokTy::Export,true);
                 tkn.DefKw(L"match",SubTokTy::Match,true);
                 tkn.DefKw(L"true",SubTokTy::True,true);
                 tkn.DefKw(L"false",SubTokTy::False,true);
+                tkn.DefKw(L"nil",SubTokTy::Nil,true);
                 tkn.DefKw(L"import",SubTokTy::Import,true);
                 tkn.DefKw(L"let",SubTokTy::Let,true);
                 tkn.DefKw(L"var",SubTokTy::Var,true);
@@ -46,8 +48,6 @@ namespace Z{
                 tkn.DefKw(L"]",SubTokTy::RSqParen);
                 tkn.DefKw(L"{",SubTokTy::LBlock,true);
                 tkn.DefKw(L"}",SubTokTy::RBlock);
-                #undef defop
-                #undef def
                 defop(L"(",150, SubTokTy::LParen,tok(SubTokTy::RParen));
                 tkn.DefKw(L")", SubTokTy::RParen);
                 #undef tok
@@ -253,6 +253,7 @@ namespace Z{
                                         }
                                         case SubTokTy::True: {tkn.Next(); return new Boolean(true);}
                                         case SubTokTy::False: {tkn.Next(); return new Boolean(false);}
+                                        case SubTokTy::Nil: {tkn.Next(); return new Nil();}
                                         case SubTokTy::Eval:{
                                                 tkn.Next();
                                                 auto expr = expectExpression();
@@ -260,6 +261,14 @@ namespace Z{
                                                         return nullptr;
                                                 }
                                                 return new EvalExpr(expr);
+                                        }
+                                        case SubTokTy::Export: {
+                                                auto var = tkn.Next();
+                                                if(var.ty==TokTy::Identifer && !var.sty){
+                                                        return new Export(var);
+                                                }
+                                                setError(L"Identifer expected as export argument",var);
+                                                return nullptr;
                                         }
                                         case SubTokTy::LBlock: return expectBlock();
                                         case SubTokTy::Oper: return expectUnary();
@@ -381,10 +390,6 @@ namespace Z{
         }
         bool p::is_op(const std::wstring& str){ return op_prec(str)!=-1; }
 
-        Statement* p::expectStatement(){
-                DBG_TRACE();
-                return new Expr2Stmt(expectExpression());
-        }
         bool p::isSuccess(){ return !failed; }
         std::wstring p::ErrorMsg(){ if(isSuccess())return L"Ok!"; else return errMsg; }
 

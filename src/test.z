@@ -1,13 +1,6 @@
 {
         let func = (a,b,c,d) -> a(b+c/d)
         var res = func(a->2*a,1,200,10)
-        match res {
-                42 => 42
-                _  => 0
-        }
-        cond {
-                a>b => 1
-                a<b => -1
-                true => 0
-        }
+        export res
+        nil
 }

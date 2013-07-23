@@ -17,6 +17,12 @@ namespace Z{
                                 delete this;
                         }
                 }
+                Context* getRoot(){
+                        if(!parent){
+                                return this;
+                        }
+                        return parent->getRoot();
+                }
                 Value& getVar(const std::wstring & name){
                         if(env.find(name)==env.end()){
                                 if(!parent){

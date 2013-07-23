@@ -25,7 +25,6 @@ namespace Z{
                 Expression*     expectUnary();  // +
                 Expression*     expectBinary(int64_t prec, Expression*lhs); //+
                 Expression*     expectPrimary(bool =true); // +
-                Statement*      expectStatement();
                 Expression*     expectBlock();
                 Expression*     expectLet();
                 Expression*     expectVar();

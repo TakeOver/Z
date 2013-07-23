@@ -1,5 +1,0 @@
-let _if = $:: if (a>b) then print("hello"); else print("bie!");
-let _eval = @:: eval!(_if);
-// and now - execute all this :)
-let (a,b) = (10,11);
-eval!(_eval); // print: bie! ;)

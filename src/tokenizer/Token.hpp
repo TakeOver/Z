@@ -49,7 +49,9 @@ namespace Z{
                 Match,
                 Eval,
                 True,
-                False
+                False,
+                Nil,
+                Export
         };
         struct Token{
                 mutable TokTy           ty = TokTy::None;

@@ -5,12 +5,13 @@ namespace Z{Expression* Parse(const std::wstring& s){
         return Parser(s).Parse();
 }}
 int main(){
-        std::wstring str,tmp;
+        std::wstring str =L"{\n",tmp;
         while(!std::cin.eof()){
                 std::getline(std::wcin,tmp);
                 if(tmp == L"run!")break;
                 str+=tmp + L'\n';
         }
+        str+=L"\n}";
         Parser par (str);
         auto ast = par.Parse();
         std::wcout << par.isSuccess() << L' ' << par.ErrorMsg() << std::endl;
