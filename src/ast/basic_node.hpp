@@ -8,7 +8,6 @@ namespace Z{
         enum class NodeTy{
                 Node = 0,
                 Expr,
-                Stmt,
                 FCall,
                 Func,
                 Match,
@@ -19,10 +18,7 @@ namespace Z{
                 Variable,
                 String,
                 Number,
-                Oper,
                 AstNodeExpr,
-                AstNode,
-                Expr2Stmt,
                 Block,
                 Let,
                 Var,

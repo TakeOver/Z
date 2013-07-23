@@ -152,14 +152,6 @@ namespace Z{
                 }
                 virtual NodeTy type() override { return NodeTy::Number; }
         };
-        class Oper: public virtual Expression{
-                Token value;
-        public:
-                ~Oper() override { }
-                Oper(const Token& value):value(value){}
-                virtual ret_ty emit(inp_ty) override {}
-                virtual NodeTy type() override { return NodeTy::Oper; }
-        };
         class Lambda: public virtual Expression{
                 Expression* body;
                 VecHelper<Variable>* args;
