@@ -5,6 +5,22 @@
 #include <fstream>
 #include <cstring>
 namespace Z{
+        class Variable: public virtual Expression{
+                uint64_t _reg = 0;//since I want SSA - bytecode would be like - getvar %reg %name
+        public:
+                Token name;
+                ~Variable() override { }
+                virtual uint64_t reg()override{ return _reg; }
+                Variable(const Token& name):name(name){}
+                virtual ret_ty emit(inp_ty) override {
+                        std::wcerr << name.str;
+                }
+                virtual Value eval(Context*ctx)override{
+                        return ctx->getVar(name.str);
+                }
+                virtual NodeTy type() override { return NodeTy::Variable; }
+                std::wstring getname(){ return name.str; }
+        };
         class BinOp: public virtual Expression{
                 uint64_t _reg = 0;
                 Token op;
@@ -22,13 +38,28 @@ namespace Z{
                 }
                 virtual Value eval(Context*ctx)override{
                         if(op.str == L"+")
-                                return Value(lhs->eval(ctx).num + rhs->eval(ctx).num);
+                                return add(lhs->eval(ctx), rhs->eval(ctx),ctx);
                         if(op.str == L"-")
-                                return Value(lhs->eval(ctx).num - rhs->eval(ctx).num);
+                                return sub(lhs->eval(ctx), rhs->eval(ctx),ctx);
                         if(op.str == L"/")
-                                return Value(lhs->eval(ctx).num / rhs->eval(ctx).num);
+                                return div(lhs->eval(ctx), rhs->eval(ctx),ctx);
                         if(op.str == L"*")
-                                return Value(lhs->eval(ctx).num * rhs->eval(ctx).num);
+                                return mul(lhs->eval(ctx), rhs->eval(ctx),ctx);
+                        if(op.str == L"%")
+                                return mod(lhs->eval(ctx), rhs->eval(ctx),ctx);
+                        if(op.str == L"and")
+                                return andb(lhs->eval(ctx), rhs->eval(ctx),ctx);
+                        if(op.str == L"or")
+                                return orb(lhs->eval(ctx), rhs->eval(ctx),ctx);
+                        if(op.str == L"="){
+                                if(lhs->type()!=NodeTy::Variable){
+                                        std::wcerr << L"Variable expected as LHS\n";
+                                        return ctx->null;
+                                }
+                                Value val;
+                                ctx->setVar(dynamic_cast<Variable*>(lhs)->name.str,val = rhs->eval(ctx));
+                                return val;
+                        }
                         return ctx->null;
                 }
                 virtual NodeTy type() override { return NodeTy::BinOp; }
@@ -49,25 +80,15 @@ namespace Z{
                 virtual Value eval(Context*ctx)override{
                         if(op.str == L"+")
                                 return lhs->eval(ctx);
-                        return Value(-lhs->eval(ctx).num);
+                        auto val = lhs->eval(ctx);
+                        if(op.str == L"-" && val.type == ValType::Number)
+                                return Value(-val.num);
+                        if(op.str == L"!"){
+                                return Value(!andb(val,Value(true),ctx).boolv);
+                        }
+                        return Value();
                 }
                 virtual NodeTy type() override { return NodeTy::UnOp; }
-        };
-        class Variable: public virtual Expression{
-                uint64_t _reg = 0;//since I want SSA - bytecode would be like - getvar %reg %name
-                Token name;
-        public:
-                ~Variable() override { }
-                virtual uint64_t reg()override{ return _reg; }
-                Variable(const Token& name):name(name){}
-                virtual ret_ty emit(inp_ty) override {
-                        std::wcerr << name.str;
-                }
-                virtual Value eval(Context*ctx)override{
-                        return ctx->getVar(name.str);
-                }
-                virtual NodeTy type() override { return NodeTy::Variable; }
-                std::wstring getname(){ return name.str; }
         };
         class String: public virtual Expression{
                 uint64_t _reg = 0;
@@ -84,6 +105,21 @@ namespace Z{
                 }
                 virtual NodeTy type() override { return NodeTy::String; }
         };
+        class Boolean: public virtual Expression{
+                uint64_t _reg = 0;
+                bool value;
+        public:
+                ~Boolean() override { }
+                virtual uint64_t reg()override{ return _reg; }
+                Boolean(bool value):value(value){}
+                virtual ret_ty emit(inp_ty) override {
+                        std::wcerr << (value?L" true ":L" false ");
+                }
+                virtual Value eval(Context*ctx)override{
+                        return Value(value);       
+                }
+                virtual NodeTy type() override { return NodeTy::Boolean; }
+        };
         class Number: public virtual Expression{
                 uint64_t _reg = 0;
                 Token value;
@@ -95,7 +131,7 @@ namespace Z{
                         std::wcerr << value.str;
                 }
                 virtual Value eval(Context*ctx)override{
-                        return Value(wcstold(value.str.c_str(),nullptr));
+                        return Value(wcstod(value.str.c_str(),nullptr));
                 }
                 virtual NodeTy type() override { return NodeTy::Number; }
         };
@@ -239,27 +275,6 @@ namespace Z{
                         delete this; 
                 }
         };
-        class AstNode: public virtual Expression{
-                uint64_t _reg = 0;
-                Statement* stmt;
-        public:
-                ~AstNode() override { }
-                virtual uint64_t reg()override{ return _reg; }
-                AstNode(Statement* stmt):stmt(stmt){}
-                virtual ret_ty emit(inp_ty) override {                        
-                        std::wcerr << L"stmt!(";
-                        stmt->emit();
-                        std::wcerr << L")";
-                }
-                virtual Value eval(Context*ctx)override{
-                        return Value(stmt,ctx);
-                }
-                virtual NodeTy type() override { return NodeTy::AstNode; }
-                virtual void FullRelease() override { 
-                        stmt->FullRelease(); 
-                        delete this; 
-                }
-        };
         class EvalExpr: public virtual Expression{
                 uint64_t _reg = 0;
                 Expression* expr;
@@ -276,9 +291,6 @@ namespace Z{
                         auto hom = expr->eval(ctx);
                         if(hom.type==ValType::Expression){
                                 return hom.expr->eval(hom.ctx);
-                        }
-                        if(hom.type==ValType::Statement){
-                                return hom.stmt->eval(hom.ctx);
                         }
                         return hom;
                 }

@@ -47,7 +47,9 @@ namespace Z{
                 Oper,
                 Comma,
                 Match,
-                Eval
+                Eval,
+                True,
+                False
         };
         struct Token{
                 mutable TokTy           ty = TokTy::None;

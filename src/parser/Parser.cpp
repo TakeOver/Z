@@ -6,13 +6,11 @@ namespace Z{
         p::~Parser(){}
         void p::_initTokenizer(){
                 #define tok(ty) Token(TokTy::None,L## #ty,0,0,ty)
-                tkn.DefKw(L"$::",SubTokTy::Quasi,true);
                 tkn.DefKw(L"expr!",SubTokTy::ExprNode,true);
-                tkn.DefKw(L"@::",SubTokTy:: ExprNode,true);
-                tkn.DefKw(L"stmt!",SubTokTy:: Quasi,true);
+                tkn.DefKw(L"${",SubTokTy::Quasi,true);
                 defop(L"+",100);
                 defop(L"-",100);
-                defop(L"=",150);
+                defop(L"=",80);
                 defop(L"==",150);
                 defop(L"!=",150);
                 defop(L">=",150);
@@ -28,11 +26,16 @@ namespace Z{
                 defop(L"&",150);
                 defop(L"&&",150);
                 defop(L"|",150);
+                defop(L"and",70);
+                defop(L"or",60);
+                defop(L"!",150);
                 defop(L"||",150);
                 defop(L"~",150);
                 tkn.DefKw(L",",SubTokTy::Comma,true);
                 tkn.DefKw(L"eval",SubTokTy::Eval,true);
                 tkn.DefKw(L"match",SubTokTy::Match,true);
+                tkn.DefKw(L"true",SubTokTy::True,true);
+                tkn.DefKw(L"false",SubTokTy::False,true);
                 tkn.DefKw(L"import",SubTokTy::Import,true);
                 tkn.DefKw(L"let",SubTokTy::Let,true);
                 tkn.DefKw(L"var",SubTokTy::Var,true);
@@ -48,7 +51,8 @@ namespace Z{
                 tkn.DefKw(L")", SubTokTy::RParen);
                 #undef tok
                 op_precedence[L"unary$-"] = 150;                
-                op_precedence[L"unary$+"] = 150;
+                op_precedence[L"unary$+"] = 150;              
+                op_precedence[L"unary$!"] = 150;
         }
         void p::defop(const std::wstring& str, int64_t prec, SubTokTy sty, Token follows){
                 tkn.DefKw(str, sty,true);
@@ -223,11 +227,17 @@ namespace Z{
                                         case SubTokTy::Match: return expectMatch();
                                         case SubTokTy::Quasi:{
                                                 tkn.Next();
-                                                auto tmp = expectStatement();
+                                                auto tmp = expectExpression();
                                                 if(!tmp){
                                                         return nullptr;
                                                 }
-                                                return new AstNode(tmp);
+                                                if(tkn.Last().sty!=SubTokTy::RBlock){
+                                                        tmp->FullRelease();
+                                                        setError(L"} expected in ast expr",tkn.Last());
+                                                        return nullptr;
+                                                }
+                                                tkn.Next();
+                                                return new AstNodeExpr(tmp);
                                         }
                                         case SubTokTy::ExprNode:{
                                                 tkn.Next();
@@ -237,6 +247,8 @@ namespace Z{
                                                 }
                                                 return new AstNodeExpr(tmp);
                                         }
+                                        case SubTokTy::True: {tkn.Next(); return new Boolean(true);}
+                                        case SubTokTy::False: {tkn.Next(); return new Boolean(false);}
                                         case SubTokTy::Eval:{
                                                 tkn.Next();
                                                 auto expr = expectExpression();

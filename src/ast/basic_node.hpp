@@ -27,7 +27,8 @@ namespace Z{
                 Let,
                 Var,
                 EvalExpr,
-                Import
+                Import,
+                Boolean
         };
         class Statement {
         public:
