@@ -42,5 +42,6 @@ namespace Z{
                 void createVar(const std::wstring &name){
                         env[name]=null;
                 }
+                void AddRef(){ ++ refcnt; }
         };
 }

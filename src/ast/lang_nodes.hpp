@@ -164,6 +164,7 @@ namespace Z{
                 }
 
                 virtual Value eval(Context*ctx)override{
+                        ctx->AddRef();
                         return Value(new Function(ctx,args,body));       
                 }
                 virtual NodeTy type() override { return NodeTy::Lambda; }
@@ -202,7 +203,9 @@ namespace Z{
                                 }
                                 ++it;
                         }
-                        return fun.fun->body->eval(_ctx);
+                        auto res = fun.fun->body->eval(_ctx);
+                        _ctx->Release();
+                        return res;
                 }
                 virtual NodeTy type() override { return NodeTy::FCall; }
         };
@@ -267,6 +270,7 @@ namespace Z{
                         std::wcerr << L")";
                 }
                 virtual Value eval(Context*ctx)override{
+                        ctx->AddRef();
                         return Value(expr,ctx);
                 }
                 virtual NodeTy type() override { return NodeTy::AstNodeExpr; }
@@ -353,9 +357,11 @@ namespace Z{
                 }
                 virtual Value eval(Context*ctx)override{
                         Value last;
+                        Context *_ctx = new Context(ctx);
                         for(auto&x:block->get()){
-                                last = x->eval(ctx);
+                                last = x->eval(_ctx);
                         }
+                        _ctx->Release();
                         return last;
                 }
                 virtual NodeTy type() override { return NodeTy::Block; }

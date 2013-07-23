@@ -15,9 +15,10 @@ int main(){
         auto ast = par.Parse();
         std::wcout << par.isSuccess() << L' ' << par.ErrorMsg() << std::endl;
         if(par.isSuccess()){
+                Context* ctx = new Context();
                 ast->emit();
                 std::wcerr <<L'\n';
-                Value val = ast->eval(new Context());
+                Value val = ast->eval(ctx);
                 if(val.type == ValType::Number){
                         std::wcout << val.num;
                 }
@@ -37,5 +38,7 @@ int main(){
                         std::wcout << L"<expression>";
                 }
                 std::wcout << std::endl;
+                ctx->Release();
+                ast->FullRelease();
         }
 }

@@ -11,7 +11,7 @@ namespace Z{
         };
         enum class SubTokTy {
                 None = 0,
-                Colon,
+                Semicolon,
                 Arrow,
                 Arrow2,
                 LParen,

@@ -32,6 +32,7 @@ namespace Z{
                 defop(L"||",150);
                 defop(L"~",150);
                 tkn.DefKw(L",",SubTokTy::Comma,true);
+                tkn.DefKw(L";",SubTokTy::Semicolon,true);
                 tkn.DefKw(L"eval",SubTokTy::Eval,true);
                 tkn.DefKw(L"match",SubTokTy::Match,true);
                 tkn.DefKw(L"true",SubTokTy::True,true);
@@ -202,6 +203,9 @@ namespace Z{
                                 return nullptr;
                         }
                         block.push_back(expr);
+                        if(tkn.Last().sty == SubTokTy::Semicolon){
+                                tkn.Next();
+                        }
                 }
                 if(tkn.Last().sty!=SubTokTy::RBlock){
                         for(auto&x:block)x->FullRelease();
