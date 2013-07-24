@@ -1,4 +1,5 @@
 #pragma once
+#include <iostream>
 #include <string>
 namespace Z{
         enum class ValType{
@@ -115,5 +116,45 @@ namespace Z{
                         return lhs;
                 }
                 return rhs;
+        }
+        inline Value eq(const Value& lhs, const Value&rhs, Context * ctx){
+                if(lhs.type!=rhs.type){
+                        return Value(false);
+                }
+                if(lhs.boolv == rhs.boolv){
+                        return Value(true);
+                }
+                return Value(false);
+        }
+        inline Value notb(const Value& lhs, Context * ctx){
+                return Value(!to_bool(lhs));
+        }
+
+        inline Value less(const Value& lhs, const Value&rhs, Context * ctx){
+                if(lhs.type!=rhs.type){
+                        return Value(lhs.type < rhs.type);
+                }
+                if(lhs.type == ValType::String){
+                        return Value(*lhs.str < *rhs.str);
+                }
+                if(lhs.type == ValType::Number){
+                        return Value(lhs.num < rhs.num);
+                }
+                if(lhs.type == ValType::Boolean){
+                        return Value(lhs.boolv < rhs.boolv);
+                }
+                std::wcerr << L"Attempt to compare uncompareable types\n";
+                return Value(false);
+        }
+        inline Value great(const Value& lhs, const Value&rhs, Context * ctx){
+                return less(rhs,lhs,ctx);
+        }
+
+        inline Value less_eq(const Value& lhs, const Value&rhs, Context * ctx){
+                return Value(eq(lhs,rhs,ctx).boolv||less(lhs,rhs,ctx).boolv);
+        }
+
+        inline Value great_eq(const Value& lhs, const Value&rhs, Context * ctx){
+                return less_eq(rhs,lhs,ctx);
         }
 }

@@ -36,6 +36,7 @@ namespace Z{
                 void setError(const std::wstring& msg,const Token& tok);
 
                 mutable std::unordered_map<std::wstring, uint64_t> op_precedence;
+                mutable std::unordered_set<std::wstring> is_right_assoc;
 
                 bool is_op(const std::wstring&);
                 int64_t op_prec(const std::wstring&);

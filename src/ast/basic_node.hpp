@@ -42,7 +42,7 @@ namespace Z{
                 uint64_t _reg = 0;
                 std::vector<K*> container;
         public:
-                ~VecHelper() override { for(auto&x:container)delete x; }
+                ~VecHelper() override { for(auto&x:container)x->FullRelease(); }
                 VecHelper(const std::vector<K*>& v):container(v){}
                 virtual ret_ty emit(inp_ty) override {}
                 virtual Value eval(Context* ctx){ return ctx->null; };

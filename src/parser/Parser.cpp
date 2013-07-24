@@ -8,34 +8,36 @@ namespace Z{
                 #define tok(ty) Token(TokTy::None,L## #ty,0,0,ty)
                 tkn.DefKw(L"expr!",SubTokTy::ExprNode,true);
                 tkn.DefKw(L"${",SubTokTy::Quasi,true);
-                defop(L"+",100);
-                defop(L"-",100);
-                defop(L"=",80);
-                defop(L"==",150);
-                defop(L"!=",150);
-                defop(L">=",150);
-                defop(L"<=",150);
-                defop(L">",150);
-                defop(L"<",150);
-                defop(L"/",150);
-                defop(L"*",150);
+                defop(L"+",120);
+                defop(L"-",120);
+                defop(L"=",20);
+                defop(L"==",100);
+                defop(L"!=",100);
+                defop(L">=",100);
+                defop(L"<=",100);
+                defop(L">",100);
+                defop(L"<",100);
+                defop(L"/",130);
+                defop(L"*",130);
                 defop(L"!",150);
                 defop(L"#",150);
-                defop(L"%",150);
-                defop(L"^",150);
+                defop(L"%",130);
+                defop(L"^",70);
                 defop(L"&",150);
-                defop(L"&&",150);
+                defop(L"&&",50);
                 defop(L"|",150);
-                defop(L"and",70);
-                defop(L"or",60);
-                defop(L"!",150);
-                defop(L"||",150);
+                defop(L"and",50);
+                defop(L"or",40);
+                defop(L"||",30);
                 defop(L"~",150);
+                is_right_assoc.insert(L"=");
                 tkn.DefKw(L",",SubTokTy::Comma,true);
                 tkn.DefKw(L";",SubTokTy::Semicolon,true);
                 tkn.DefKw(L"eval",SubTokTy::Eval,true);
                 tkn.DefKw(L"export",SubTokTy::Export,true);
                 tkn.DefKw(L"match",SubTokTy::Match,true);
+                tkn.DefKw(L"if",SubTokTy::If,true);
+                tkn.DefKw(L"else",SubTokTy::Else,true);
                 tkn.DefKw(L"cond",SubTokTy::Cond,true);
                 tkn.DefKw(L"show!",SubTokTy::Show,true);
                 tkn.DefKw(L"showln!",SubTokTy::Showln,true);
@@ -47,11 +49,11 @@ namespace Z{
                 tkn.DefKw(L"var",SubTokTy::Var,true);
                 tkn.DefKw(L"->",SubTokTy::Arrow,true);
                 tkn.DefKw(L"=>",SubTokTy::Arrow2,true);
-                defop(L"[",150,SubTokTy::LSqParen,tok(SubTokTy::RSqParen));
+                defop(L"[",160,SubTokTy::LSqParen,tok(SubTokTy::RSqParen));
                 tkn.DefKw(L"]",SubTokTy::RSqParen);
                 tkn.DefKw(L"{",SubTokTy::LBlock,true);
                 tkn.DefKw(L"}",SubTokTy::RBlock);
-                defop(L"(",150, SubTokTy::LParen,tok(SubTokTy::RParen));
+                defop(L"(",160, SubTokTy::LParen,tok(SubTokTy::RParen));
                 tkn.DefKw(L")", SubTokTy::RParen);
                 #undef tok
                 op_precedence[L"unary$-"] = 150;                
@@ -115,6 +117,16 @@ namespace Z{
         }
         Expression* p::expectBinary(int64_t prec, Expression* lhs){
                 DBG_TRACE();
+                if(is_right_assoc.find(tkn.Last().str)!=is_right_assoc.end()){
+                        auto op = tkn.Last();
+                        tkn.Next();
+                        auto rhs = expectExpression();
+                        if(!rhs){
+                                lhs->FullRelease();
+                                return nullptr;
+                        }
+                        return new BinOp(op,lhs,rhs);
+                }
                 while (true) {
                         DBG_TRACE("%s pos:%lu", "in loop", tkn.Last().line);
                         int64_t opprec = op_prec(tkn.Last().str);    
@@ -277,6 +289,35 @@ namespace Z{
                                         case SubTokTy::Oper: return expectUnary();
                                         case SubTokTy::Let: return expectLet();
                                         case SubTokTy::Var: return expectVar();
+                                        case SubTokTy::If: {
+                                                tkn.Next();
+                                                auto cond = expectExpression();
+                                                if(!cond){
+                                                        return nullptr;
+                                                }
+                                                if(tkn.Last().sty == SubTokTy::Then){/*Optional, for now*/
+                                                        tkn.Next();
+                                                }
+                                                auto iftrue = expectExpression();
+                                                if(!iftrue){
+                                                        cond->FullRelease();
+                                                        return nullptr;
+                                                }
+                                                Expression* iffalse;
+                                                if(tkn.Last().sty != SubTokTy::Else){/*optional, for now*/
+                                                        iffalse = new Nil();
+                                                }else{
+                                                        tkn.Next();
+                                                        iffalse = expectExpression();
+                                                        if(!iffalse){
+                                                                cond->FullRelease();
+                                                                iftrue->FullRelease();
+                                                                return nullptr;
+                                                        }
+                                                }
+                                                return new Cond(new VecHelper<Expression>({cond,new Boolean(true)}),
+                                                                new VecHelper<Expression>({iftrue,iffalse}));
+                                        }
                                         case SubTokTy::Import: return expectImport();
                                         case SubTokTy::Show: {
                                                 tkn.Next();

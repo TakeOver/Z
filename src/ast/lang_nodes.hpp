@@ -43,6 +43,18 @@ namespace Z{
                                 return mul(lhs->eval(ctx), rhs->eval(ctx),ctx);
                         if(op.str == L"%")
                                 return mod(lhs->eval(ctx), rhs->eval(ctx),ctx);
+                        if(op.str == L">")
+                                return great(lhs->eval(ctx), rhs->eval(ctx),ctx);
+                        if(op.str == L"<")
+                                return less(lhs->eval(ctx), rhs->eval(ctx),ctx);
+                        if(op.str == L">=")
+                                return great_eq(lhs->eval(ctx), rhs->eval(ctx),ctx);
+                        if(op.str == L"<=")
+                                return less_eq(lhs->eval(ctx), rhs->eval(ctx),ctx);
+                        if(op.str == L"==")
+                                return eq(lhs->eval(ctx), rhs->eval(ctx),ctx);
+                        if(op.str == L"!=")
+                                return notb(eq(lhs->eval(ctx),rhs->eval(ctx),ctx),ctx);
                         if(op.str == L"and"){
                                 auto lval = lhs->eval(ctx);
                                 if(to_bool(lval)){
@@ -88,7 +100,7 @@ namespace Z{
                         if(op.str == L"-" && val.type == ValType::Number)
                                 return Value(-val.num);
                         if(op.str == L"!"){
-                                return Value(!andb(val,Value(true),ctx).boolv);
+                                return notb(val,ctx);
                         }
                         return Value();
                 }
@@ -280,6 +292,7 @@ namespace Z{
                         std::wifstream in (name);
                         delete [] name;
                         if(!in){
+                                ctx->RaiseException(Value(new std::wstring(L"Failed to load module")));
                                 std::wcerr << L"Failed to load module " << module.str << L".z\n";
                                 return ctx->null;
                         }
@@ -456,7 +469,11 @@ namespace Z{
                 Token name;
                 Expression* value;
         public:
-                ~Var() override { value->FullRelease(); }
+                ~Var() override {
+                        if(value){
+                                value->FullRelease();
+                        }
+                }
                 Var(const Token& name, Expression* value):name(name),value(value){}
                 virtual ret_ty emit(inp_ty) override { 
                         std::wcerr << L"var "<< name.str << L" = "; if(value)value->emit();else std::wcerr << L"nil";
