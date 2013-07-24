@@ -39,6 +39,14 @@ namespace Z{
                 Value(Expression* expr,Context * parent):type(ValType::Expression),expr(expr),ctx(parent){}
                 Value(std::wstring* str):type(ValType::String),str(str){ctx=nullptr;}
         };
+        inline bool to_bool(const Value& val){
+                if(!val.type){
+                        return false;
+                }
+                if(val.type!=ValType::Boolean || val.boolv)
+                        return true;
+                return false;
+        }
         inline Value add(const Value& lhs, const Value&rhs, Context * ctx){
                 if(!lhs.type || !rhs.type){
                         return Value();
@@ -97,21 +105,15 @@ namespace Z{
                 return Value();
         }  
         inline Value andb(const Value& lhs, const Value&rhs, Context * ctx){
-                if(!lhs.type || !rhs.type )
-                        return Value(false);
-                if(lhs.type == ValType::Boolean && !lhs.boolv){
-                        return Value(false);
+                if(to_bool(lhs)){
+                        return rhs;
                 }
-                //else lhs == true
-                return rhs;
+                return Value(false);
         }
         inline Value orb(const Value& lhs, const Value&rhs, Context * ctx){
-                if(!lhs.type){
-                        return rhs;
+                if(to_bool(lhs)){
+                        return lhs;
                 }
-                if(lhs.type==ValType::Boolean && !lhs.boolv){
-                        return rhs;
-                }
-                return lhs;
+                return rhs;
         }
 }

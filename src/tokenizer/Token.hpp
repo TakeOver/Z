@@ -51,7 +51,10 @@ namespace Z{
                 True,
                 False,
                 Nil,
-                Export
+                Export,
+                Cond,
+                Show,
+                Showln
         };
         struct Token{
                 mutable TokTy           ty = TokTy::None;

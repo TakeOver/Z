@@ -18,8 +18,8 @@ namespace Z{
                 Expression*     expectExpression(); // +
                 Number*         expectNumber(); // +
                 Expression*     expectVariable(bool = true); // +
- //               Lambda*         expectLambda();
                 Match*          expectMatch();
+                Cond*           expectCond();
                 String*         expectString(); // +
                 Expression*     expectParen(); // +
                 Expression*     expectUnary();  // +

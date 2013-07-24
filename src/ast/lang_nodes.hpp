@@ -43,10 +43,20 @@ namespace Z{
                                 return mul(lhs->eval(ctx), rhs->eval(ctx),ctx);
                         if(op.str == L"%")
                                 return mod(lhs->eval(ctx), rhs->eval(ctx),ctx);
-                        if(op.str == L"and")
-                                return andb(lhs->eval(ctx), rhs->eval(ctx),ctx);
-                        if(op.str == L"or")
-                                return orb(lhs->eval(ctx), rhs->eval(ctx),ctx);
+                        if(op.str == L"and"){
+                                auto lval = lhs->eval(ctx);
+                                if(to_bool(lval)){
+                                        return rhs->eval(ctx);
+                                }
+                                return lval;
+                        }
+                        if(op.str == L"or"){
+                                auto lval = lhs->eval(ctx);
+                                if(to_bool(lval)){
+                                        return lval;
+                                }
+                                return rhs->eval(ctx);
+                        }
                         if(op.str == L"="){
                                 if(lhs->type()!=NodeTy::Variable){
                                         std::wcerr << L"Variable expected as LHS\n";
@@ -121,6 +131,39 @@ namespace Z{
                         return Value();       
                 }
                 virtual NodeTy type() override { return NodeTy::Nil; }
+        };
+        class Show: public virtual Expression{
+                Expression * what;
+                bool newline;
+        public:
+                ~Show() override { what->FullRelease(); }
+                Show(Expression* what, bool newline = false):what(what),newline(newline){}
+                virtual ret_ty emit(inp_ty) override {
+                        std::wcerr << (L"show!( "); what->emit(); std::wcerr << L" )\n";
+                }
+                virtual Value eval(Context*ctx)override{
+                        auto val = what->eval(ctx);
+                        if(val.type == ValType::Number){
+                                std::wcout << val.num;
+                        } else if(val.type == ValType::Boolean){
+                                std::wcout << (val.boolv?L"true":L"false");
+                        } else if(val.type == ValType::String){
+                                std::wcout << *val.str;
+                        } else if(val.type == ValType::Null){
+                                std::wcout << L"nil";
+                        } else if(val.type == ValType::Function){
+                                std::wcout << L"<function>";
+                        } else if(val.type == ValType::Expression){
+                                std::wcout << L"<expression>";
+                        } else {
+                                std::wcout << L"<unimplemented>";
+                        }
+                        if(newline){
+                                std::wcout << L'\n';
+                        }
+                        return val;
+                }
+                virtual NodeTy type() override { return NodeTy::Show; }
         };
         class Export: public virtual Expression{
                 Token variable;
@@ -241,11 +284,13 @@ namespace Z{
                                 return ctx->null;
                         }
                         extern Expression* Parse(const std::wstring&);
-                        std::wstring buf,tmp;
+                        std::wstring buf = L"{", // no global variables :)
+                                        tmp;
                         while(!in.eof()){
                                 std::getline(in,tmp);
                                 buf+= tmp + L"\n";
                         }
+                        buf += L"\nnil\n}"; // import return nil. +TODO add optional end of module.
                         in.close();
                         auto expr = Parse(std::wstring(buf));
                         if(!expr){
@@ -321,7 +366,6 @@ namespace Z{
                 }
                 virtual Value eval(Context*ctx)override{
                         auto pattern = what->eval(ctx);
-                        std::wcerr << L"match to " << pattern.num << L'\n';
                         for(uint i=0;i<cond->get().size();++i){
                                 auto pattern2 = cond->get()[i]->eval(ctx);
                                 if(pattern2.num == pattern.num){
@@ -331,6 +375,36 @@ namespace Z{
                         return ctx->null;
                 }
                 virtual NodeTy type() override { return NodeTy::Match; }
+        };
+        class Cond: public virtual Expression{
+                VecHelper<Expression> *cond;
+                VecHelper<Expression> *res;
+        public:
+                ~Cond() override { delete cond; delete res; }
+                Cond(decltype(cond) cond, decltype(res) res):cond(cond),res(res){}
+                virtual ret_ty emit(inp_ty) override {     
+                        std::wcerr << L"cond!" << L"{\n";
+                        for(auto i1 = cond->get().begin(), 
+                                 i2 = res->get().begin(), 
+                                 e1 = cond->get().end(), 
+                                 e2 = res->get().end();
+                                 i1!=e1 && i2!=e2; 
+                                 ++i1,++i2){
+                                std::wcerr << L"\t|"; (*i1)->emit(); std::wcerr << L"->"; (*i2)->emit();
+                                std::wcerr << L'\n';
+                        }
+                        std::wcerr << L"}";
+                }
+                virtual Value eval(Context*ctx)override{
+                        for(uint i=0;i<cond->get().size();++i){
+                                auto pattern = cond->get()[i]->eval(ctx);
+                                if(to_bool(pattern)){
+                                        return res->get()[i]->eval(ctx);
+                                }
+                        }
+                        return ctx->null;
+                }
+                virtual NodeTy type() override { return NodeTy::Cond; }
         };
         class Block: public virtual Expression{
                 VecHelper<Expression>* block;

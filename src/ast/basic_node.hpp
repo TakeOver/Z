@@ -26,7 +26,9 @@ namespace Z{
                 Import,
                 Boolean,
                 Nil,
-                Export
+                Export,
+                Cond,
+                Show
         };
         class Expression {
         public:

@@ -36,6 +36,9 @@ namespace Z{
                 tkn.DefKw(L"eval",SubTokTy::Eval,true);
                 tkn.DefKw(L"export",SubTokTy::Export,true);
                 tkn.DefKw(L"match",SubTokTy::Match,true);
+                tkn.DefKw(L"cond",SubTokTy::Cond,true);
+                tkn.DefKw(L"show!",SubTokTy::Show,true);
+                tkn.DefKw(L"showln!",SubTokTy::Showln,true);
                 tkn.DefKw(L"true",SubTokTy::True,true);
                 tkn.DefKw(L"false",SubTokTy::False,true);
                 tkn.DefKw(L"nil",SubTokTy::Nil,true);
@@ -227,8 +230,8 @@ namespace Z{
                         case TokTy::Operator: {
                                 switch(sty){
                                         case SubTokTy::LParen: return expectParen();
-                                        //case SubTokTy::LSqParen LBlock;
                                         case SubTokTy::Match: return expectMatch();
+                                        case SubTokTy::Cond: return expectCond();
                                         case SubTokTy::Quasi:{
                                                 tkn.Next();
                                                 auto tmp = expectExpression();
@@ -275,6 +278,22 @@ namespace Z{
                                         case SubTokTy::Let: return expectLet();
                                         case SubTokTy::Var: return expectVar();
                                         case SubTokTy::Import: return expectImport();
+                                        case SubTokTy::Show: {
+                                                tkn.Next();
+                                                auto expr = expectExpression();
+                                                if(!expr){
+                                                        return nullptr;
+                                                }
+                                                return new Show(expr);
+                                        }
+                                        case SubTokTy::Showln:{
+                                                tkn.Next();
+                                                auto expr = expectExpression();
+                                                if(!expr){
+                                                        return nullptr;
+                                                }
+                                                return new Show(expr,true);
+                                        }
                                         default: setError(L"Primary expected[0]",tok); return nullptr;
                                 }
                         }
@@ -448,6 +467,49 @@ namespace Z{
                 }
                 tkn.Next();
                 return new Match((expr), new VecHelper<Expression>(cond), new VecHelper<Expression>(res));
+
+
+        }
+        Cond* p::expectCond(){
+                tkn.Next();
+                if(tkn.Last().sty!=SubTokTy::LBlock){
+                        setError(L"{ expected in cond expr",tkn.Last());
+                        return nullptr;
+                }
+                tkn.Next();
+                std::vector<Expression*> cond;
+                std::vector<Expression*> res;
+                while(tkn.Last().sty!=SubTokTy::RBlock && !tkn.eof()){
+                        auto _cond = expectExpression();
+                        if(!_cond){
+                                for(auto&x:cond)x->FullRelease();
+                                for(auto&x:res)x->FullRelease();
+                                return nullptr;
+                        }
+                        if(tkn.Last().sty!=SubTokTy::Arrow2){
+                                for(auto&x:cond)x->FullRelease();
+                                for(auto&x:res)x->FullRelease();
+                                return nullptr;                                
+                        }
+                        tkn.Next();
+                        auto _res = expectExpression();
+                        if(!_res){
+                                for(auto&x:cond)x->FullRelease();
+                                for(auto&x:res)x->FullRelease();
+                                _cond->FullRelease();
+                                return nullptr;
+                        }
+                        cond.push_back(_cond);
+                        res.push_back(_res);
+                }
+                if(tkn.Last().sty!=SubTokTy::RBlock){
+                                for(auto&x:cond)x->FullRelease();
+                                for(auto&x:res)x->FullRelease();
+                                setError(L"} expected in cond expr",tkn.Last());
+                                return nullptr;                        
+                }
+                tkn.Next();
+                return new Cond(new VecHelper<Expression>(cond), new VecHelper<Expression>(res));
 
 
         }

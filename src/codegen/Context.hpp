@@ -10,10 +10,16 @@ namespace Z{
                 std::unordered_map<std::wstring, Value> env;
         public:
                 Value null;
-                Context(Context * parent = nullptr):parent(parent){}
+                Context(Context * parent):parent(parent){
+                        parent->AddRef();
+                }
+                Context():parent(nullptr){}
                 ~Context(){}
                 void Release(){
                         if(--refcnt <= 0){
+                                if(parent){
+                                        parent->Release();
+                                }
                                 delete this;
                         }
                 }
