@@ -12,12 +12,15 @@ namespace Z{
                 Function,
                 Expression,
                 Array,
-                Hash
+                Hash,
+                NativeFunction
         };
         class Expression;
         class Variable;
         class Context;
         template<typename> class VecHelper;
+        struct Value;
+        typedef Value (*native_func_t)(Context*,const std::vector<Value>&);
         struct Function{
                 Context* ctx;
                 VecHelper<Variable> *args;
@@ -35,6 +38,7 @@ namespace Z{
                                 Expression* expr;
                                 Context * ctx;
                         };
+                        native_func_t native;
                         std::vector<Value> *arr;
                         std::unordered_map<std::wstring,Value> *hash;
 
@@ -42,6 +46,7 @@ namespace Z{
                 Value():type(ValType::Null),expr(nullptr),ctx(nullptr){}
                 Value(const Value &val) = default;
                 Value(double num):type(ValType::Number),num(num){ctx=nullptr;}
+                Value(native_func_t native):type(ValType::NativeFunction),native(native){ctx=nullptr;}
                 Value(uint64_t boolv):type(ValType::Boolean),boolv(boolv){ctx=nullptr;}
                 Value(bool boolv):type(ValType::Boolean),boolv(boolv){ctx=nullptr;}
                 Value(Function* fun):type(ValType::Function),fun(fun){ctx=nullptr;}
@@ -86,6 +91,8 @@ namespace Z{
                                 ++i;
                         }
                         out << L"}";
+                } else if(val.type == ValType::NativeFunction){
+                        out << L"<native_function>";
                 } else {
                         out << L"<unimplemented>";
                 }

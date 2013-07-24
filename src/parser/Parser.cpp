@@ -24,9 +24,8 @@ namespace Z{
                 defop(L"#",150);
                 defop(L"%",130);
                 defop(L"^",70);
-                defop(L"&",150);
                 defop(L"&&",50);
-                defop(L"|",150);
+                defop(L".",160);
                 defop(L"and",50);
                 defop(L"or",40);
                 defop(L"||",30);
@@ -145,8 +144,13 @@ namespace Z{
                                 return nullptr;
                         }
                         Expression* rhs;
-
-                        if(follows_oper.find(binOp.sty)!=follows_oper.end()){
+                        if(binOp.str == L"."){
+                                rhs = expectVariable(false);
+                                if(!rhs){
+                                        lhs->FullRelease();
+                                        return nullptr;
+                                }
+                        }else if(follows_oper.find(binOp.sty)!=follows_oper.end()){
                                 if(binOp.sty == SubTokTy::LParen){
                                         std::vector<Expression*> tmp;
                                         while(!tkn.eof() && tkn.Last().sty!=SubTokTy::RParen){
@@ -185,13 +189,17 @@ namespace Z{
                         }
                         int64_t nextprec = op_prec(tkn.Last().str);
                         if (opprec < nextprec) {
-                                rhs = expectBinary(opprec, rhs);
+                                rhs = expectBinary(opprec+1, rhs);
                                 if (!rhs){ 
                                         lhs->FullRelease();
                                         return nullptr;
                                 }
                         }
-                        if(binOp.sty == SubTokTy::LParen){
+                        if(binOp.str == L"."){
+                                String * str = new String(Token(TokTy::String,dynamic_cast<Variable*>(rhs)->getname()));
+                                delete rhs;
+                                lhs = new BinOp(binOp, lhs, str);
+                        }else if(binOp.sty == SubTokTy::LParen){
                                 lhs = new FCall(lhs,dynamic_cast<VecHelper<Expression>*>(rhs));
                         }else{
                                 lhs = new BinOp(binOp, lhs,rhs);

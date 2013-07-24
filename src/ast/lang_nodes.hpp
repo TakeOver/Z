@@ -20,9 +20,9 @@ namespace Z{
                 std::wstring getname(){ return name.str; }
         };
         class BinOp: public virtual Expression{
+        public:
                 Token op;
                 Expression * lhs, * rhs;
-        public:
                 ~BinOp() override { delete lhs; delete rhs; }
                 BinOp(const Token& op, Expression * lhs, Expression * rhs):op(op),lhs(lhs),rhs(rhs){}
                 virtual ret_ty emit(inp_ty) override {
@@ -55,6 +55,17 @@ namespace Z{
                                 return eq(lhs->eval(ctx), rhs->eval(ctx),ctx);
                         if(op.str == L"!=")
                                 return notb(eq(lhs->eval(ctx),rhs->eval(ctx),ctx),ctx);
+                        if(op.str == L"." || op.str == L"["){
+                                auto obj = lhs->eval(ctx);
+                                auto key = rhs->eval(ctx);
+                                if(key.type == ValType::String){
+                                        return getKey(obj, *key.str, ctx);
+                                }
+                                if(key.type == ValType::Number){
+                                        return getIdx(obj,static_cast<int64_t>(key.num),ctx);
+                                }
+                                return ctx->null;
+                        }
                         if(op.str == L"and"){
                                 auto lval = lhs->eval(ctx);
                                 if(to_bool(lval)){
@@ -72,7 +83,7 @@ namespace Z{
                         if(op.str == L"="){
                                 if(lhs->type() == NodeTy::BinOp){
                                         auto bo = dynamic_cast<BinOp*>(lhs);
-                                        if(bo->op.str == L"["){
+                                        if(bo->op.str == L"[" || bo->op.str == L"."){
                                                 auto _what = bo->lhs->eval(ctx);
                                                 auto _key = bo->rhs->eval(ctx);
                                                 Value val;
@@ -361,21 +372,42 @@ namespace Z{
                 }
 
                 virtual Value eval(Context*ctx)override{
-                        auto fun = func->eval(ctx);
+                        Value fun;
+                        std::vector<Value> _args;
+                        BinOp *obj = dynamic_cast<decltype(obj)>(func);
+                        if(obj && (obj->op.str == L"." || obj->op.str == L"[")){
+                                auto    _obj = obj->lhs->eval(ctx), 
+                                        _key = obj->rhs->eval(ctx);
+                                if(_key.type==ValType::String){
+                                        fun = getKey(_obj,*_key.str,ctx);
+                                        _args.push_back(_obj);
+                                }else if(_key.type == ValType::Number){
+                                        fun = getIdx(_obj,(int64_t)_key.num,ctx);
+                                }
+                        }else{
+                                fun = func->eval(ctx);
+                        }
+                        for(auto&x:args->get()){
+                                _args.push_back(x->eval(ctx));
+                        }
+                        if(fun.type == ValType::NativeFunction){
+                                return fun.native(ctx,_args);
+                        }
                         if(fun.type!=ValType::Function){
                                 return ctx->null;
                         }       
                         Context* _ctx = new Context(fun.fun->ctx);
-                        auto& as = args->get();
-                        auto& vs = fun.fun->args->get();
-                        uint it = 0;
-                        for(auto&x:vs){
-                                _ctx->createVar(x->getname());
-                                if(it<as.size()){
-                                        _ctx->setVar(x->getname(),as[it]->eval(ctx));
+                        uint i = 0;
+                        for(auto&x:fun.fun->args->get()){
+                                if(i>=_args.size()){
+                                        break;
                                 }
-                                ++it;
+                                _ctx->createVar(x->getname());
+                                _ctx->setVar(x->getname(), _args[i]);
+                                ++i;
                         }
+                        _ctx->createVar(L"arguments");
+                        _ctx->setVar(L"arguments", Value(new std::vector<Value>(std::move(_args))));
                         auto res = fun.fun->body->eval(_ctx);
                         _ctx->Release();
                         return res;

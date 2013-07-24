@@ -21,6 +21,7 @@ namespace Z{
                 RSqParen,
                 LSqParen,
                 Func,
+                Dot,
                 Class,
                 EscapeStr,
                 Namespace,

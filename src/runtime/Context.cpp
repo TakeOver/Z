@@ -24,6 +24,7 @@ namespace Z{
                                 delete this;
                         }
                 }
+                decltype(ctx::env)& ctx::getEnv(){ return env; }
                 Context* ctx::getRoot(){
                         if(!parent){
                                 return this;

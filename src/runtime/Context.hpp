@@ -14,6 +14,7 @@ namespace Z{
                 Value null;
                 Context(Context * parent);
                 Context();
+                decltype(env)& getEnv();
                 void SetTry(){
                         _is_try = true;
                 }
