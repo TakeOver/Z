@@ -70,6 +70,21 @@ namespace Z{
                                 return rhs->eval(ctx);
                         }
                         if(op.str == L"="){
+                                if(lhs->type() == NodeTy::BinOp){
+                                        auto bo = dynamic_cast<BinOp*>(lhs);
+                                        if(bo->op.str == L"["){
+                                                auto _what = bo->lhs->eval(ctx);
+                                                auto _key = bo->rhs->eval(ctx);
+                                                Value val;
+                                                if(_key.type == ValType::String){
+                                                        setKey(_what, *_key.str,val=rhs->eval(ctx), ctx);
+                                                }
+                                                if(_key.type == ValType::Number){
+                                                        setIdx(_what,static_cast<int64_t>(_key.num),val = rhs->eval(ctx),ctx);
+                                                }
+                                                return val;
+                                        }
+                                }
                                 if(lhs->type()!=NodeTy::Variable){
                                         std::wcerr << L"Variable expected as LHS\n";
                                         return ctx->null;
@@ -144,6 +159,56 @@ namespace Z{
                 }
                 virtual NodeTy type() override { return NodeTy::Nil; }
         };
+        class Array: public virtual Expression{
+                VecHelper<Expression>* arr;
+        public:
+                ~Array() override { delete arr; }
+                Array(decltype(arr) arr):arr(arr){}
+                virtual ret_ty emit(inp_ty) override {
+                        std::wcerr << (L"Array!( ");
+                        for(auto&x:arr->get()){
+                                x->emit();
+                                std::wcerr << L' ';
+                        }
+                        std::wcerr << L')';
+                }
+                virtual Value eval(Context*ctx)override{
+                        std::vector<Value>* array = new std::vector<Value>();
+                        array->resize(arr->get().size());
+                        uint it = 0;
+                        for(auto&x:arr->get()){
+                                (*array)[it] = x->eval(ctx);
+                                ++it;
+                        }
+                        return Value(array);
+                }
+                virtual NodeTy type() override { return NodeTy::Array; }
+        };
+        class Hash: public virtual Expression{
+                VecHelper<Expression>* arr;
+                std::vector<Token> keys;
+        public:
+                ~Hash() override { delete arr; }
+                Hash(decltype(arr) arr,decltype(keys)keys):arr(arr),keys(keys){}
+                virtual ret_ty emit(inp_ty) override {
+                        std::wcerr << (L"Hash!( ");
+                        for(auto&x:arr->get()){
+                                x->emit();
+                                std::wcerr << L' ';
+                        }
+                        std::wcerr << L')';
+                }
+                virtual Value eval(Context*ctx)override{
+                        std::unordered_map<std::wstring,Value>* hash = new std::unordered_map<std::wstring,Value>();
+                        uint it = 0;
+                        for(auto&x:arr->get()){
+                                (*hash)[keys[it].str] = x->eval(ctx);
+                                ++it;
+                        }
+                        return Value(hash);
+                }
+                virtual NodeTy type() override { return NodeTy::Hash; }
+        };
         class Show: public virtual Expression{
                 Expression * what;
                 bool newline;
@@ -155,21 +220,7 @@ namespace Z{
                 }
                 virtual Value eval(Context*ctx)override{
                         auto val = what->eval(ctx);
-                        if(val.type == ValType::Number){
-                                std::wcout << val.num;
-                        } else if(val.type == ValType::Boolean){
-                                std::wcout << (val.boolv?L"true":L"false");
-                        } else if(val.type == ValType::String){
-                                std::wcout << *val.str;
-                        } else if(val.type == ValType::Null){
-                                std::wcout << L"nil";
-                        } else if(val.type == ValType::Function){
-                                std::wcout << L"<function>";
-                        } else if(val.type == ValType::Expression){
-                                std::wcout << L"<expression>";
-                        } else {
-                                std::wcout << L"<unimplemented>";
-                        }
+                        print(val);
                         if(newline){
                                 std::wcout << L'\n';
                         }

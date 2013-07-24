@@ -8,6 +8,7 @@ namespace Z{
                 #define tok(ty) Token(TokTy::None,L## #ty,0,0,ty)
                 tkn.DefKw(L"expr!",SubTokTy::ExprNode,true);
                 tkn.DefKw(L"${",SubTokTy::Quasi,true);
+                tkn.DefKw(L"#{",SubTokTy::HashKey,true);
                 defop(L"+",120);
                 defop(L"-",120);
                 defop(L"=",20);
@@ -33,7 +34,7 @@ namespace Z{
                 is_right_assoc.insert(L"=");
                 tkn.DefKw(L",",SubTokTy::Comma,true);
                 tkn.DefKw(L";",SubTokTy::Semicolon,true);
-                tkn.DefKw(L"eval",SubTokTy::Eval,true);
+                tkn.DefKw(L"eval!",SubTokTy::Eval,true);
                 tkn.DefKw(L"export",SubTokTy::Export,true);
                 tkn.DefKw(L"match",SubTokTy::Match,true);
                 tkn.DefKw(L"if",SubTokTy::If,true);
@@ -208,6 +209,77 @@ namespace Z{
                 }
                 return res;
         }
+        Expression* p::expectArray(){
+                tkn.Next();
+                std::vector<Expression*> vec;
+                while(!tkn.eof() && tkn.Last().sty!=SubTokTy::RSqParen){
+                        auto expr = expectExpression();
+                        if(!expr){
+                                expr->FullRelease();
+                                return nullptr;
+                        }
+                        vec.push_back(expr);
+                        if(tkn.Last().sty!=SubTokTy::Comma){
+                                break;
+                        }
+                        tkn.Next();
+                }
+                if(tkn.Last().sty!=SubTokTy::RSqParen){
+                        for(auto&x:vec){
+                                x->FullRelease();
+                        }
+                        setError(L"] expected at end of array",tkn.Last());
+                        return nullptr;
+                }
+                tkn.Next();
+                return new Array(new VecHelper<Expression>(vec));
+        }
+        Expression* p::expectHash(){
+                tkn.Next();
+                std::vector<Token> keys;
+                std::vector<Expression*> vals;
+                while(!tkn.eof() && tkn.Last().sty!=SubTokTy::RBlock){
+                        auto key = tkn.Last();
+                        if(key.ty != TokTy::String && key.ty!=TokTy::Identifer){
+                                for(auto&x:vals){
+                                        x->FullRelease();
+                                }
+                                setError(L"Key(identifer or string) expected in hash",key);
+                                return nullptr;       
+                        }
+                        tkn.Next();
+                        keys.push_back(key);
+                        if(tkn.Last().str!= L"="){
+                                for(auto&x:vals){
+                                        x->FullRelease();
+                                }
+                                setError(L"Assign expected in hash",tkn.Last());
+                                return nullptr;
+                        }
+                        tkn.Next();
+                        auto expr = expectExpression();
+                        if(!expr){
+                                for(auto&x:vals){
+                                        x->FullRelease();
+                                }
+                                return nullptr;
+                        }
+                        vals.push_back(expr);
+                        if(tkn.Last().sty!=SubTokTy::Comma){
+                                break;
+                        }
+                        tkn.Next();
+                }
+                if(tkn.Last().sty!=SubTokTy::RBlock){
+                        for(auto&x:vals){
+                                x->FullRelease();
+                        }
+                        setError(L"} expected at end of hash",tkn.Last());
+                        return nullptr;
+                }
+                tkn.Next();
+                return new Hash(new VecHelper<Expression>(vals), keys);
+        }
         Expression* p::expectBlock(){
                 tkn.Next();
                 std::vector<Expression*> block;
@@ -244,6 +316,8 @@ namespace Z{
                                         case SubTokTy::LParen: return expectParen();
                                         case SubTokTy::Match: return expectMatch();
                                         case SubTokTy::Cond: return expectCond();
+                                        case SubTokTy::HashKey: return expectHash();
+                                        case SubTokTy::LSqParen: return expectArray();
                                         case SubTokTy::Quasi:{
                                                 tkn.Next();
                                                 auto tmp = expectExpression();

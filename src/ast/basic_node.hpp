@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <vector>
-#include "../codegen/Context.hpp"
+#include "../runtime/Context.hpp"
 namespace Z{
         #define ret_ty void
         #define inp_ty void
@@ -28,7 +28,9 @@ namespace Z{
                 Nil,
                 Export,
                 Cond,
-                Show
+                Show,
+                Array,
+                Hash
         };
         class Expression {
         public:

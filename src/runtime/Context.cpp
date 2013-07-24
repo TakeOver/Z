@@ -1,33 +1,22 @@
-#pragma once
-#include <string>
-#include <iostream>
-#include "Value.hpp"
-#include <unordered_map>
+#include "Context.hpp"
 namespace Z{
-        class Context
-        {
-                long refcnt = 1;
-                Context * parent;
-                std::unordered_map<std::wstring, Value> env;
-                bool _is_try = false;
-        public:
-                Value null;
-                Context(Context * parent):parent(parent){
+        namespace { using ctx = Context; }
+                ctx::Context(Context * parent):parent(parent){
                         parent->AddRef();
                 }
-                Context():parent(nullptr){}
-                void SetTry(){
-                        _is_try = true;
-                }
-                Value RaiseException(const Value& excep){ // TODO IMPLEMENTATION
+                ctx::Context():parent(nullptr){}
+
+                Value ctx::RaiseException(const Value& excep){ // TODO IMPLEMENTATION
                         if(_is_try){
                                 return Value();
                         }
                         std::wcerr << (*(excep.str)) << L'\n';
                         exit(0);
                 }
-                ~Context(){}
-                void Release(){
+
+                ctx::~Context(){}
+
+                void ctx::Release(){
                         if(--refcnt <= 0){
                                 if(parent){
                                         parent->Release();
@@ -35,13 +24,13 @@ namespace Z{
                                 delete this;
                         }
                 }
-                Context* getRoot(){
+                Context* ctx::getRoot(){
                         if(!parent){
                                 return this;
                         }
                         return parent->getRoot();
                 }
-                Value& getVar(const std::wstring & name){
+                Value& ctx::getVar(const std::wstring & name){
                         if(env.find(name)==env.end()){
                                 if(!parent){
                                         return null;
@@ -50,7 +39,7 @@ namespace Z{
                         }
                         return env[name];
                 }
-                bool setVar(const std::wstring &name, const Value& val){
+                bool ctx::setVar(const std::wstring &name, const Value& val){
                         if(env.find(name)!=env.end()){
                                 env[name]=val;
                                 return true;
@@ -63,9 +52,8 @@ namespace Z{
                         }
                         return true;
                 }
-                void createVar(const std::wstring &name){
+                void ctx::createVar(const std::wstring &name){
                         env[name]=null;
                 }
-                void AddRef(){ ++ refcnt; }
-        };
+                void ctx::AddRef(){ ++ refcnt; }
 }

@@ -28,6 +28,8 @@ namespace Z{
                 Expression*     expectBlock();
                 Expression*     expectLet();
                 Expression*     expectVar();
+                Expression*     expectArray();
+                Expression*     expectHash();
                 Expression*     expectImport();
                 void            _initTokenizer();
 

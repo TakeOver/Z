@@ -1,6 +1,8 @@
 #pragma once
 #include <iostream>
 #include <string>
+#include <vector>
+#include <unordered_map>
 namespace Z{
         enum class ValType{
                 Null = 0,
@@ -8,7 +10,9 @@ namespace Z{
                 String,
                 Boolean,
                 Function,
-                Expression
+                Expression,
+                Array,
+                Hash
         };
         class Expression;
         class Variable;
@@ -31,15 +35,97 @@ namespace Z{
                                 Expression* expr;
                                 Context * ctx;
                         };
+                        std::vector<Value> *arr;
+                        std::unordered_map<std::wstring,Value> *hash;
+
                 };
                 Value():type(ValType::Null),expr(nullptr),ctx(nullptr){}
+                Value(const Value &val) = default;
                 Value(double num):type(ValType::Number),num(num){ctx=nullptr;}
                 Value(uint64_t boolv):type(ValType::Boolean),boolv(boolv){ctx=nullptr;}
                 Value(bool boolv):type(ValType::Boolean),boolv(boolv){ctx=nullptr;}
                 Value(Function* fun):type(ValType::Function),fun(fun){ctx=nullptr;}
                 Value(Expression* expr,Context * parent):type(ValType::Expression),expr(expr),ctx(parent){}
                 Value(std::wstring* str):type(ValType::String),str(str){ctx=nullptr;}
+                Value(std::vector<Value>* arr):type(ValType::Array),arr(arr){ctx=nullptr;}
+                Value(std::unordered_map<std::wstring,Value>* hash):type(ValType::Hash),hash(hash){ctx=nullptr;}
         };
+        inline void print(const Value& val, std::wostream & out = std::wcout){
+                if(val.type == ValType::Number){
+                        out << val.num;
+                } else if(val.type == ValType::Boolean){
+                        out << (val.boolv?L"true":L"false");
+                } else if(val.type == ValType::String){
+                        out << *val.str;
+                } else if(val.type == ValType::Null){
+                        out << L"nil";
+                } else if(val.type == ValType::Function){
+                        out << L"<function>";
+                } else if(val.type == ValType::Expression){
+                        out << L"<expression>";
+                } else if(val.type == ValType::Array){
+                        out << L"[";
+                                auto i = 0u;
+                                while(i < val.arr->size()){
+                                        print((*val.arr)[i]);
+                                        if(i+1!=val.arr->size()){
+                                                out << L',';
+                                        }
+                                        ++i;
+                                }
+                                out << L']';
+                } else if(val.type == ValType::Hash){
+                        auto i = 1u;
+                        out << L"#{";
+                        for(auto&x:*val.hash){
+                                out << L"\"" << x.first << L"\"=";
+                                print(x.second);
+                                if(i != (*val.hash).size()){
+                                        std::wcerr << L',';
+                                }
+                                ++i;
+                        }
+                        out << L"}";
+                } else {
+                        out << L"<unimplemented>";
+                }
+        }
+        inline Value getIdx(const Value& val, int64_t idx, Context * ctx){
+                if(val.type!=ValType::Array){
+                        return Value();
+                }
+                if(std::abs(idx)>=val.arr->size()){
+                        return Value();
+                }
+                if(idx<0){
+                        idx = val.arr->size() + idx;
+                }
+                return (*val.arr)[idx];
+        }
+        inline void setIdx(const Value& val, int64_t idx, const Value& what, Context * ctx){
+                if(val.type!=ValType::Array){
+                        return;
+                }
+                if(std::abs(idx)>=val.arr->size()){
+                        val.arr->resize(std::abs(idx)+1);
+                }
+                if(idx<0){
+                        idx = val.arr->size() + idx;
+                }
+                (*val.arr)[idx] = what;
+        }
+        inline Value getKey(const Value& val, const std::wstring &key, Context * ctx){
+                if(val.type!=ValType::Hash){
+                        return Value();
+                }
+                return (*val.hash)[key];
+        }
+        inline void setKey(const Value& val, const std::wstring& key, const Value& what, Context * ctx){
+                if(val.type!=ValType::Hash){
+                        return;
+                }
+                (*val.hash)[key] = what;
+        }
         inline bool to_bool(const Value& val){
                 if(!val.type){
                         return false;

@@ -57,7 +57,8 @@ namespace Z{
                 Showln,
                 If,
                 Then,
-                Else
+                Else,
+                HashKey
         };
         struct Token{
                 mutable TokTy           ty = TokTy::None;
