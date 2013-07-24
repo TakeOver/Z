@@ -81,7 +81,7 @@ namespace Z{
                                 out << L"\"" << x.first << L"\"=";
                                 print(x.second);
                                 if(i != (*val.hash).size()){
-                                        std::wcerr << L',';
+                                        out << L',';
                                 }
                                 ++i;
                         }

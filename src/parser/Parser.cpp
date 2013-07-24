@@ -39,7 +39,11 @@ namespace Z{
                 tkn.DefKw(L"match",SubTokTy::Match,true);
                 tkn.DefKw(L"if",SubTokTy::If,true);
                 tkn.DefKw(L"else",SubTokTy::Else,true);
+                tkn.DefKw(L"then",SubTokTy::Then,true);
+                tkn.DefKw(L"for",SubTokTy::For,true);
+                tkn.DefKw(L"while",SubTokTy::While,true);
                 tkn.DefKw(L"cond",SubTokTy::Cond,true);
+                tkn.DefKw(L"to",SubTokTy::To,true);
                 tkn.DefKw(L"show!",SubTokTy::Show,true);
                 tkn.DefKw(L"showln!",SubTokTy::Showln,true);
                 tkn.DefKw(L"true",SubTokTy::True,true);
@@ -302,6 +306,45 @@ namespace Z{
                 tkn.Next();
                 return new Block(new VecHelper<Expression>(block));
         }
+        Expression* p::expectFor(){
+                tkn.Next();
+                auto var = expectVariable(false);
+                if(!var){
+                        return nullptr;
+                }
+                if(tkn.Last().str!=L"="){
+                        delete var;
+                        setError(L"= expected in for-loop",tkn.Last());
+                        return nullptr;
+                }
+                tkn.Next();
+                auto from = expectExpression();
+                if(!from){
+                        delete var;
+                        return nullptr;
+                }
+                if(tkn.Last().sty!=SubTokTy::To && tkn.Last().sty!=SubTokTy::Arrow2){
+                        from->FullRelease();
+                        delete var;
+                        setError(L"=> or to expected as range in for-loop",tkn.Last());
+                        return nullptr;
+                }
+                tkn.Next();
+                auto to = expectExpression();
+                if(!to){
+                        delete var;
+                        from->FullRelease();
+                        return nullptr;
+                }
+                auto body = expectExpression();
+                if(!body){
+                        delete var;
+                        from->FullRelease();
+                        to->FullRelease();
+                        return nullptr;
+                }
+                return new For(dynamic_cast<Variable*>(var),from,to,body);
+        }
         Expression* p::expectPrimary(bool lambda_possible){
                 DBG_TRACE();
                 auto tok = tkn.Last();
@@ -318,6 +361,19 @@ namespace Z{
                                         case SubTokTy::Cond: return expectCond();
                                         case SubTokTy::HashKey: return expectHash();
                                         case SubTokTy::LSqParen: return expectArray();
+                                        case SubTokTy::While:{
+                                                tkn.Next();
+                                                auto cond = expectExpression();
+                                                if(!cond){
+                                                        return nullptr;
+                                                }
+                                                auto body = expectExpression();
+                                                if(!body){
+                                                        cond->FullRelease();
+                                                }
+                                                return new While(cond,body);
+                                        }
+                                        case SubTokTy::For: return expectFor();
                                         case SubTokTy::Quasi:{
                                                 tkn.Next();
                                                 auto tmp = expectExpression();

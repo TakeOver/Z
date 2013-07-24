@@ -159,6 +159,70 @@ namespace Z{
                 }
                 virtual NodeTy type() override { return NodeTy::Nil; }
         };
+        class For: public virtual Expression{
+                Variable * var;
+                Expression *from, *to,*body;
+
+        public:
+                ~For() override { delete var; from->FullRelease(); to->FullRelease(); body->FullRelease(); }
+                For(decltype(var)var,decltype(from)from,decltype(to)to,decltype(body) body):var(var),from(from),to(to),body(body){}
+                virtual ret_ty emit(inp_ty) override {
+                        std::wcerr << (L"for ") << var->getname() << L' ';
+                        from->emit(); std::wcerr << L" to "; to->emit(); std::wcerr << L' ';
+                        body->emit();
+                }
+                virtual Value eval(Context*ctx)override{
+                        auto _ctx = new Context(ctx);
+                        auto _from =  from->eval(ctx);
+                        if(_from.type!=ValType::Number){
+                                ctx->RaiseException(L"Number expected as for-range(from)");
+                                return ctx->null;
+                        }
+                        _ctx->createVar(var->getname());
+                        _ctx->setVar(var->getname(),_from);
+                        auto _to = to->eval(ctx);
+                        if(_to.type!=ValType::Number){
+                                ctx->RaiseException(L"Number expected as for-range(to)");
+                                return ctx->null;
+                        }
+                        auto step = 1.0;
+                        if(_from.num > _to.num)step=-step;
+                        Value res;
+                        while(to_bool(less_eq(_ctx->getVar(var->getname()),_to,ctx))){
+                                res=body->eval(_ctx);
+                                auto _var = _ctx->getVar(var->getname());
+                                if(_var.type!=ValType::Number){
+                                        ctx->RaiseException(L"Variable type must be number in for-range");
+                                        return ctx->null;
+                                }
+                                _ctx->setVar(var->getname(),Value(_var.num + step));
+                        }
+                        return res;
+
+
+                }
+                virtual NodeTy type() override { return NodeTy::For; }
+        };
+        class While: public virtual Expression{
+                Expression* cond, *body;
+        public:
+                ~While() override { cond->FullRelease(); body->FullRelease(); }
+                While(decltype(cond) cond,decltype(body) body):cond(cond),body(body){}
+                virtual ret_ty emit(inp_ty) override {
+                        std::wcerr << (L"while("); cond->emit(); std::wcerr << L")";
+                        body->emit();
+                }
+                virtual Value eval(Context*ctx)override{
+                        Value res;
+                        auto _ctx = new Context(ctx);
+                        while(to_bool(cond->eval(ctx))){
+                                res = body->eval(_ctx);
+                        }
+                        _ctx->Release();
+                        return res;
+                }
+                virtual NodeTy type() override { return NodeTy::While; }
+        };
         class Array: public virtual Expression{
                 VecHelper<Expression>* arr;
         public:

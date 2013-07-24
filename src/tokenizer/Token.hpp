@@ -24,6 +24,7 @@ namespace Z{
                 Class,
                 EscapeStr,
                 Namespace,
+                To,
                 Use,
                 Import,
                 From,
@@ -58,7 +59,9 @@ namespace Z{
                 If,
                 Then,
                 Else,
-                HashKey
+                HashKey,
+                For,
+                While
         };
         struct Token{
                 mutable TokTy           ty = TokTy::None;

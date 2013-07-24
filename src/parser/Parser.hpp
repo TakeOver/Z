@@ -28,6 +28,7 @@ namespace Z{
                 Expression*     expectBlock();
                 Expression*     expectLet();
                 Expression*     expectVar();
+                Expression*     expectFor();
                 Expression*     expectArray();
                 Expression*     expectHash();
                 Expression*     expectImport();

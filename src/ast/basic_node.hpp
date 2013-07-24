@@ -30,7 +30,9 @@ namespace Z{
                 Cond,
                 Show,
                 Array,
-                Hash
+                Hash,
+                While,
+                For
         };
         class Expression {
         public:
