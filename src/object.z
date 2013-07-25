@@ -1,0 +1,35 @@
+let object = ${#{
+}}
+
+let allocator = (self,args...)-> {
+        let obj = self.create()
+        obj.init(...args)
+        obj
+}
+let Object = #{
+        new = self -> self.init()
+        create = self -> #{}
+        init = self -> 
+                #{base = eval!(object)}
+}
+let Class = #{
+        base = Object.new(),
+        new = allocator,
+        create = self -> 
+                eval!(self.class_ast),
+        init = (self,inherits,ast) -> {
+                ast.append(${"base"},
+                           ${inherits.create()})
+                ast.append(${"super"},
+                           ${(self,args...)->
+                                        self.base.init(...args)})
+                self.class_ast = ast
+                self
+        }
+}
+export Class
+export Object
+
+//let obj = Class.new(Object,${#{
+// // class %name% { %body% } is just sugar for this.
+//}})

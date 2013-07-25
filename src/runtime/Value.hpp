@@ -25,7 +25,8 @@ namespace Z{
                 Context* ctx;
                 VecHelper<Variable> *args;
                 Expression *body;
-                Function(Context* ctx, VecHelper<Variable> * args, Expression*body):ctx(ctx),args(args),body(body){}
+                bool is_ellipsis;
+                Function(Context* ctx, VecHelper<Variable> * args, Expression*body,bool is_ellipsis = false):ctx(ctx),args(args),body(body),is_ellipsis(is_ellipsis){}
         };
         struct Value{
                 ValType type;

@@ -170,6 +170,23 @@ namespace Z{
                 }
                 virtual NodeTy type() override { return NodeTy::Nil; }
         };
+        class Ellipsis: public virtual Expression{
+                Expression* what;
+        public:
+                ~Ellipsis() override { what->FullRelease(); }
+                Ellipsis(Expression * what):what(what){}
+                virtual ret_ty emit(inp_ty) override {
+                        std::wcerr << (L"..."); what->emit();
+                }
+                virtual Value eval(Context*ctx)override{
+                        auto ell = what->eval(ctx);
+                        if(ell.type!=ValType::Array){
+                                return Value(new std::vector<Value>());
+                        }
+                        return ell;
+                }
+                virtual NodeTy type() override { return NodeTy::Ellipsis; }
+        };
         class For: public virtual Expression{
                 Variable * var;
                 Expression *from, *to,*body;
@@ -336,22 +353,25 @@ namespace Z{
         class Lambda: public virtual Expression{
                 Expression* body;
                 VecHelper<Variable>* args;
+                bool is_ellipsis;
         public:
                 ~Lambda() override { delete args; delete body; }
-                Lambda(Expression * body, VecHelper<Variable> *args):body(body),args(args){}
+                Lambda(Expression * body, VecHelper<Variable> *args, bool is_ellipsis=false):body(body),args(args),
+                        is_ellipsis(is_ellipsis){}
                 virtual ret_ty emit(inp_ty) override {
                         std::wcerr << L"lambda!( ";
                         for(auto&x:args->get()){
                                 x->emit();
                                 std::wcerr << L" ";
                         }
+                        if(is_ellipsis)std::wcerr << L"... ";
                         std::wcerr << L")->";
                         body->emit();
                 }
 
                 virtual Value eval(Context*ctx)override{
                         ctx->AddRef();
-                        return Value(new Function(ctx,args,body));       
+                        return Value(new Function(ctx,args,body,is_ellipsis));       
                 }
                 virtual NodeTy type() override { return NodeTy::Lambda; }
         };
@@ -388,7 +408,14 @@ namespace Z{
                                 fun = func->eval(ctx);
                         }
                         for(auto&x:args->get()){
-                                _args.push_back(x->eval(ctx));
+                                if(dynamic_cast<Ellipsis*>(x)!=0){
+                                        auto ell = x->eval(ctx);
+                                        for(auto&y:*ell.arr){
+                                                _args.push_back(y);
+                                        }
+                                }else{
+                                        _args.push_back(x->eval(ctx));
+                                }
                         }
                         if(fun.type == ValType::NativeFunction){
                                 return fun.native(ctx,_args);
@@ -397,17 +424,24 @@ namespace Z{
                                 return ctx->null;
                         }       
                         Context* _ctx = new Context(fun.fun->ctx);
-                        uint i = 0;
-                        for(auto&x:fun.fun->args->get()){
-                                if(i>=_args.size()){
+                        auto& vars = fun.fun->args->get();
+                        bool ell = fun.fun->is_ellipsis;
+                        for(uint j = 0; j<_args.size();++j){
+                                if(j+1==vars.size() && ell){
+                                        std::vector<Value>* rest = new std::vector<Value>();
+                                        for(uint k = j; k<_args.size();++k){
+                                                rest->push_back(_args[k]);
+                                        }
+                                        _ctx->createVar(vars.back()->getname());
+                                        _ctx->setVar(vars.back()->getname(), Value(rest));
                                         break;
                                 }
-                                _ctx->createVar(x->getname());
-                                _ctx->setVar(x->getname(), _args[i]);
-                                ++i;
+                                if(j>=vars.size()){
+                                        break;
+                                }
+                                _ctx->createVar(vars[j]->getname());
+                                _ctx->setVar(vars[j]->getname(),_args[j]);
                         }
-                        _ctx->createVar(L"arguments");
-                        _ctx->setVar(L"arguments", Value(new std::vector<Value>(std::move(_args))));
                         auto res = fun.fun->body->eval(_ctx);
                         _ctx->Release();
                         return res;

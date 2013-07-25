@@ -32,7 +32,8 @@ namespace Z{
                 Array,
                 Hash,
                 While,
-                For
+                For,
+                Ellipsis
         };
         class Expression {
         public:

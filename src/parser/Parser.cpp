@@ -33,6 +33,7 @@ namespace Z{
                 is_right_assoc.insert(L"=");
                 tkn.DefKw(L",",SubTokTy::Comma,true);
                 tkn.DefKw(L";",SubTokTy::Semicolon,true);
+                tkn.DefKw(L"...",SubTokTy::Ellipsis,true);
                 tkn.DefKw(L"eval!",SubTokTy::Eval,true);
                 tkn.DefKw(L"export",SubTokTy::Export,true);
                 tkn.DefKw(L"match",SubTokTy::Match,true);
@@ -154,6 +155,7 @@ namespace Z{
                                 if(binOp.sty == SubTokTy::LParen){
                                         std::vector<Expression*> tmp;
                                         while(!tkn.eof() && tkn.Last().sty!=SubTokTy::RParen){
+                                                bool is_ell = (tkn.Last().sty == SubTokTy::Ellipsis)?(tkn.Next(),true):false;
                                                 auto expr = expectExpression();
                                                 if(!expr){
                                                         for(auto&x:tmp){
@@ -161,7 +163,7 @@ namespace Z{
                                                         }
                                                         return nullptr;
                                                 }
-                                                tmp.push_back(expr);
+                                                tmp.push_back(is_ell?new Ellipsis(expr):expr);
 
                                                 if(tkn.Last().sty == SubTokTy::Comma){
                                                         tkn.Next();
@@ -515,47 +517,86 @@ namespace Z{
         Expression* p::expectParen(){
                 DBG_TRACE();
                 tkn.Next(); // eat (
+                bool is_ell = false;
                 auto res = expectExpression();
                 if(tkn.Last().sty!=SubTokTy::RParen){ // tuple or lambda arrow notation
                         DBG_TRACE("%s","try lambda or tuple");
                         if(tkn.Last().sty == SubTokTy::Comma){
                                 std::vector<Expression*> vec;
                                 vec.push_back(res);
-                                while(tkn.Last().sty == SubTokTy::Comma){
+                                while(!tkn.eof() && tkn.Last().sty == SubTokTy::Comma){
                                         tkn.Next();
                                         res = expectExpression();
                                         if(!res){
-                                                for(auto&x:vec)x->FullRelease();
+                                                for(auto&x:vec){
+                                                        x->FullRelease();
+                                                }
                                                 return nullptr;
                                         }
                                         vec.push_back(res);
+                                        if(tkn.Last().sty == SubTokTy::Ellipsis){
+                                                tkn.Next();
+                                                is_ell = true;
+                                                break;
+                                        }
                                 }
                                 if(tkn.Last().sty!=SubTokTy::RParen){
                                         setError(L"RParen expected[0]", tkn.Last());
-                                        for(auto&x:vec)x->FullRelease();
+                                        for(auto&x:vec){
+                                                x->FullRelease();
+                                        }
                                         return nullptr;
                                 }
-                                if(tkn.Next().sty == SubTokTy::Arrow){ // (a,b...)->expr
+                                if(tkn.Next().sty != SubTokTy::Arrow && is_ell){
+                                        for(auto&x:vec){
+                                                x->FullRelease();
+                                        }
+                                        setError(L"Arrow expected after lambda arg list(expected because of Ellipsis)",tkn.Last());
+                                        return nullptr;
+                                }
+                                if(tkn.Last().sty == SubTokTy::Arrow){ // (a,b...)->expr
                                         tkn.Next();
                                         auto body = expectExpression();
                                         if(!body){
-                                                for(auto&x:vec)x->FullRelease();
+                                                for(auto&x:vec){
+                                                        x->FullRelease();
+                                                }
                                                 return nullptr;
                                         }
                                         std::vector<Variable*> varvec;
                                         for(auto&x:vec){
                                                 if(x->type()!=NodeTy::Variable){
-                                                        for(auto&x:vec)x->FullRelease();
+                                                        for(auto&x:vec){
+                                                                x->FullRelease();
+                                                        }
                                                         setError(L"Variable exected",tkn.Last());
                                                         return nullptr;
                                                 }
                                                 varvec.push_back(dynamic_cast<Variable*>(x));
                                         }
-                                        return new Lambda((body),new VecHelper<Variable>(varvec));
+                                        return new Lambda((body),new VecHelper<Variable>(varvec),is_ell);
                                 }
                                 setError(L"Arrow expected", tkn.Last());
                                 for(auto&x:vec)x->FullRelease();
                                 return nullptr;
+                        }else if(tkn.Last().sty==SubTokTy::Ellipsis && res->type()==NodeTy::Variable){
+                                if(tkn.Next().sty != SubTokTy::RParen){
+                                        res->FullRelease();
+                                        setError(L"Rparen expected[2]",tkn.Last());
+                                        return nullptr;
+                                }
+                                if(tkn.Next().sty != SubTokTy::Arrow){
+                                        res->FullRelease();
+                                        setError(L"Arrow expected",tkn.Last());
+                                        return nullptr;
+                                }
+                                tkn.Next();
+                                auto body = expectExpression();
+                                if(!body){
+                                        res->FullRelease();
+                                        return nullptr;
+                                }
+                                return new Lambda(body,new VecHelper<Variable>({dynamic_cast<Variable*>(res)}),true);
                         }
                         setError(L"RParen expected[1]", tkn.Last());
                         res->FullRelease();

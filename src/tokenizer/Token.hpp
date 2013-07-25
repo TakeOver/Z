@@ -22,6 +22,7 @@ namespace Z{
                 LSqParen,
                 Func,
                 Dot,
+                Ellipsis,
                 Class,
                 EscapeStr,
                 Namespace,

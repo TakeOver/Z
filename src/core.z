@@ -1,0 +1,25 @@
+let eval = (what)-> eval! parse(what)
+let map = (func, list) -> {
+        var res = []
+        for i in list {
+                res[] = func(i)
+        }
+        res
+}
+let reduce = (func, list) -> {
+        match #list {
+                0 => nil
+                _ => {
+                        var res = list[0]
+                        var i = 1
+                        while(i< #list){
+                                res = func(res,list[i])
+                                i=i+1
+                        }
+                        res
+                }
+        }
+}
+export reduce
+export map
+export eval

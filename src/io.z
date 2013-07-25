@@ -1,0 +1,5 @@
+let io = #{
+        read = self -> input(),
+        write = (self,arg)->show! arg
+}
+export io
