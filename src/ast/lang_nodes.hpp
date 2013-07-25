@@ -462,9 +462,10 @@ namespace Z{
         };
         class Import: public virtual Expression{
                 Token module;
+                bool ret_mod;
         public:
                 ~Import() override {}
-                Import(const Token& module):module(module){}
+                Import(const Token& module,bool ret_mod = false):module(module),ret_mod(ret_mod){}
                 virtual ret_ty emit(inp_ty) override { std::wcerr << L"import " << module.str; }
                 virtual Value eval(Context*ctx)override{
                         char * name = new char[module.str.length()*4+10];
@@ -490,7 +491,14 @@ namespace Z{
                         if(!expr){
                                 return ctx->null;
                         }
-                        return expr->eval(ctx);
+                        if(!ret_mod){
+                                return expr->eval(ctx);
+                        }
+                        Context * _ctx = new Context();
+                        expr->eval(_ctx);
+                        auto res = Value(new std::unordered_map<std::wstring, Value>(_ctx->getEnv()));
+                        _ctx->Release();
+                        return res;
 
                 }
                 virtual NodeTy type() override { return NodeTy::Import; }

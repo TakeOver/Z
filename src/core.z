@@ -1,4 +1,5 @@
-let eval = (what)-> eval! parse(what)
+let eval = (what)-> eval! parse! (what)
+let read = () -> parse!(input())
 let map = (func, list) -> {
         var res = []
         for i in list {
@@ -7,12 +8,13 @@ let map = (func, list) -> {
         res
 }
 let reduce = (func, list) -> {
-        match #list {
+        let len = list.len()
+        match len {
                 0 => nil
                 _ => {
                         var res = list[0]
                         var i = 1
-                        while(i< #list){
+                        while i < len {
                                 res = func(res,list[i])
                                 i=i+1
                         }
@@ -23,3 +25,4 @@ let reduce = (func, list) -> {
 export reduce
 export map
 export eval
+export read

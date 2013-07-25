@@ -6,7 +6,6 @@ namespace Z{
         p::~Parser(){}
         void p::_initTokenizer(){
                 #define tok(ty) Token(TokTy::None,L## #ty,0,0,ty)
-                tkn.DefKw(L"expr!",SubTokTy::ExprNode,true);
                 tkn.DefKw(L"${",SubTokTy::Quasi,true);
                 tkn.DefKw(L"#{",SubTokTy::HashKey,true);
                 defop(L"+",120);
@@ -37,6 +36,7 @@ namespace Z{
                 tkn.DefKw(L"eval!",SubTokTy::Eval,true);
                 tkn.DefKw(L"export",SubTokTy::Export,true);
                 tkn.DefKw(L"match",SubTokTy::Match,true);
+                tkn.DefKw(L"as",SubTokTy::As,true);
                 tkn.DefKw(L"if",SubTokTy::If,true);
                 tkn.DefKw(L"else",SubTokTy::Else,true);
                 tkn.DefKw(L"then",SubTokTy::Then,true);
@@ -88,8 +88,17 @@ namespace Z{
                 auto module = tkn.Next();
                 tkn.Next();
                 if(module.ty!=TokTy::Identifer){
-                        setError(L"Indetifer expected in import",module);
+                        setError(L"Identifer expected in import as module name",module);
                         return nullptr;
+                }
+                if( tkn.Last().sty == SubTokTy::As ){
+                        if(tkn.Next().ty !=TokTy::Identifer){
+                                setError(L"Identifer expected in import as 'as' argument",tkn.Last());
+                                return nullptr;
+                        }
+                        auto var = tkn.Last();
+                        tkn.Next();
+                        return new Let(var,new Import(module,true));
                 }
                 return new Import(module);
         }
@@ -396,14 +405,6 @@ namespace Z{
                                                         return nullptr;
                                                 }
                                                 tkn.Next();
-                                                return new AstNodeExpr(tmp);
-                                        }
-                                        case SubTokTy::ExprNode:{
-                                                tkn.Next();
-                                                auto tmp = expectExpression();
-                                                if(!tmp){
-                                                        return nullptr;
-                                                }
                                                 return new AstNodeExpr(tmp);
                                         }
                                         case SubTokTy::True: {tkn.Next(); return new Boolean(true);}
