@@ -23,7 +23,7 @@ namespace Z{
         public:
                 Token op;
                 Expression * lhs, * rhs;
-                ~BinOp() override { delete lhs; delete rhs; }
+                ~BinOp() override { }
                 BinOp(const Token& op, Expression * lhs, Expression * rhs):op(op),lhs(lhs),rhs(rhs){}
                 virtual ret_ty emit(inp_ty) override {
                         std::wcerr << L"(";
@@ -58,6 +58,13 @@ namespace Z{
                         if(op.str == L"." || op.str == L"["){
                                 auto obj = lhs->eval(ctx);
                                 auto key = rhs->eval(ctx);
+                                if(obj.type!=ValType::Hash && key.type == ValType::String){
+                                        auto obj_name = match_ty_tostr(obj.type);
+                                        obj = ctx->getVar(obj_name);
+                                        if(obj.type!=ValType::Hash){
+                                                return ctx->null;
+                                        }
+                                }
                                 if(key.type == ValType::String){
                                         return getKey(obj, *key.str, ctx);
                                 }
@@ -86,6 +93,9 @@ namespace Z{
                                         if(bo->op.str == L"[" || bo->op.str == L"."){
                                                 auto _what = bo->lhs->eval(ctx);
                                                 auto _key = bo->rhs->eval(ctx);
+                                                if(_what.type!=ValType::Hash && _key.type == ValType::String){
+                                                        _what = ctx->getVar(match_ty_tostr(_what.type));
+                                                }
                                                 Value val;
                                                 if(_key.type == ValType::String){
                                                         setKey(_what, *_key.str,val=rhs->eval(ctx), ctx);
@@ -112,7 +122,7 @@ namespace Z{
                 Token op;
                 Expression * lhs;
         public:
-                ~UnOp() override { delete lhs; }
+                ~UnOp() override { }
                 UnOp(const Token& op, Expression * lhs):op(op),lhs(lhs){}
                 virtual ret_ty emit(inp_ty) override {
                         std::wcerr << op.str << L"(";
@@ -173,7 +183,7 @@ namespace Z{
         class Ellipsis: public virtual Expression{
                 Expression* what;
         public:
-                ~Ellipsis() override { what->FullRelease(); }
+                ~Ellipsis() override { }
                 Ellipsis(Expression * what):what(what){}
                 virtual ret_ty emit(inp_ty) override {
                         std::wcerr << (L"..."); what->emit();
@@ -192,7 +202,7 @@ namespace Z{
                 Expression *from, *to,*body;
 
         public:
-                ~For() override { delete var; from->FullRelease(); to->FullRelease(); body->FullRelease(); }
+                ~For() override { }
                 For(decltype(var)var,decltype(from)from,decltype(to)to,decltype(body) body):var(var),from(from),to(to),body(body){}
                 virtual ret_ty emit(inp_ty) override {
                         std::wcerr << (L"for ") << var->getname() << L' ';
@@ -234,7 +244,7 @@ namespace Z{
         class While: public virtual Expression{
                 Expression* cond, *body;
         public:
-                ~While() override { cond->FullRelease(); body->FullRelease(); }
+                ~While() override { }
                 While(decltype(cond) cond,decltype(body) body):cond(cond),body(body){}
                 virtual ret_ty emit(inp_ty) override {
                         std::wcerr << (L"while("); cond->emit(); std::wcerr << L")";
@@ -254,7 +264,7 @@ namespace Z{
         class Array: public virtual Expression{
                 VecHelper<Expression>* arr;
         public:
-                ~Array() override { delete arr; }
+                ~Array() override { }
                 Array(decltype(arr) arr):arr(arr){}
                 virtual ret_ty emit(inp_ty) override {
                         std::wcerr << (L"Array!( ");
@@ -277,10 +287,10 @@ namespace Z{
                 virtual NodeTy type() override { return NodeTy::Array; }
         };
         class Hash: public virtual Expression{
-                VecHelper<Expression>* arr;
-                std::vector<Token> keys;
         public:
-                ~Hash() override { delete arr; }
+                VecHelper<Expression>* arr;
+                VecHelper<Expression>* keys;
+                ~Hash() override { }
                 Hash(decltype(arr) arr,decltype(keys)keys):arr(arr),keys(keys){}
                 virtual ret_ty emit(inp_ty) override {
                         std::wcerr << (L"Hash!( ");
@@ -294,7 +304,10 @@ namespace Z{
                         std::unordered_map<std::wstring,Value>* hash = new std::unordered_map<std::wstring,Value>();
                         uint it = 0;
                         for(auto&x:arr->get()){
-                                (*hash)[keys[it].str] = x->eval(ctx);
+                                auto keyval = keys->get()[it]->eval(ctx);
+                                if(keyval.type == ValType::String){
+                                        (*hash)[*keyval.str] = x->eval(ctx);
+                                }
                                 ++it;
                         }
                         return Value(hash);
@@ -305,7 +318,7 @@ namespace Z{
                 Expression * what;
                 bool newline;
         public:
-                ~Show() override { what->FullRelease(); }
+                ~Show() override { }
                 Show(Expression* what, bool newline = false):what(what),newline(newline){}
                 virtual ret_ty emit(inp_ty) override {
                         std::wcerr << (L"show!( "); what->emit(); std::wcerr << L" )\n";
@@ -355,7 +368,7 @@ namespace Z{
                 VecHelper<Variable>* args;
                 bool is_ellipsis;
         public:
-                ~Lambda() override { delete args; delete body; }
+                ~Lambda() override { }
                 Lambda(Expression * body, VecHelper<Variable> *args, bool is_ellipsis=false):body(body),args(args),
                         is_ellipsis(is_ellipsis){}
                 virtual ret_ty emit(inp_ty) override {
@@ -379,7 +392,7 @@ namespace Z{
                 Expression* func;
                 VecHelper<Expression>* args;
         public:
-                ~FCall() override { delete args; delete func; }
+                ~FCall() override { }
                 FCall(Expression * func, VecHelper<Expression> *args):func(func),args(args){}
                 virtual ret_ty emit(inp_ty) override {
                         func->emit();
@@ -397,9 +410,12 @@ namespace Z{
                         BinOp *obj = dynamic_cast<decltype(obj)>(func);
                         if(obj && (obj->op.str == L"." || obj->op.str == L"[")){
                                 auto    _obj = obj->lhs->eval(ctx), 
-                                        _key = obj->rhs->eval(ctx);
+                                        _key = obj->rhs->eval(ctx), __obj = _obj;
+                                if(_key.type == ValType::String && _obj.type!=ValType::Hash){
+                                        __obj = ctx->getVar(match_ty_tostr(_obj.type));
+                                }
                                 if(_key.type==ValType::String){
-                                        fun = getKey(_obj,*_key.str,ctx);
+                                        fun = getKey(__obj,*_key.str,ctx);
                                         _args.push_back(_obj);
                                 }else if(_key.type == ValType::Number){
                                         fun = getIdx(_obj,(int64_t)_key.num,ctx);
@@ -452,7 +468,7 @@ namespace Z{
         class Expr: public virtual Expression{
                 Expression* expr;
         public:
-                ~Expr() override { delete expr; }
+                ~Expr() override { }
                 Expr(Expression* expr):expr(expr){}
                 virtual ret_ty emit(inp_ty) override { expr->emit(); }
                 virtual Value eval(Context*ctx)override{
@@ -506,7 +522,7 @@ namespace Z{
         class AstNodeExpr: public virtual Expression{
                 Expression* expr;
         public:
-                ~AstNodeExpr() override {}
+                ~AstNodeExpr() override { }
                 AstNodeExpr(Expression* expr):expr(expr){}
                 virtual ret_ty emit(inp_ty) override {
                         std::wcerr << L"expr!(";
@@ -551,7 +567,7 @@ namespace Z{
                 VecHelper<Expression> *cond;
                 VecHelper<Expression> *res;
         public:
-                ~Match() override { delete cond; delete res;what->FullRelease(); }
+                ~Match() override { }
                 Match(Expression*what, decltype(cond) cond, decltype(res) res):what(what),cond(cond),res(res){}
                 virtual ret_ty emit(inp_ty) override {     
                         std::wcerr << L"match!("; what->emit(); std::wcerr << L"){\n";
@@ -582,7 +598,7 @@ namespace Z{
                 VecHelper<Expression> *cond;
                 VecHelper<Expression> *res;
         public:
-                ~Cond() override { delete cond; delete res; }
+                ~Cond() override { }
                 Cond(decltype(cond) cond, decltype(res) res):cond(cond),res(res){}
                 virtual ret_ty emit(inp_ty) override {     
                         std::wcerr << L"cond!" << L"{\n";
@@ -611,7 +627,7 @@ namespace Z{
         class Block: public virtual Expression{
                 VecHelper<Expression>* block;
         public:
-                ~Block() override { /*if(block)block->FullRelease();*/ }
+                ~Block() override { }
                 Block(VecHelper<Expression>* block):block(block){}
                 virtual ret_ty emit(inp_ty) override {                        
                         std::wcerr << L"{\n";
@@ -641,7 +657,7 @@ namespace Z{
                 Token name;
                 Expression* value;
         public:
-                ~Let() override { value->FullRelease(); }
+                ~Let() override { }
                 Let(const Token& name, Expression* value):name(name),value(value){}
                 virtual ret_ty emit(inp_ty) override { 
                         std::wcerr << L"let "<< name.str << L" = "; value->emit();
@@ -658,11 +674,7 @@ namespace Z{
                 Token name;
                 Expression* value;
         public:
-                ~Var() override {
-                        if(value){
-                                value->FullRelease();
-                        }
-                }
+                ~Var() override { }
                 Var(const Token& name, Expression* value):name(name),value(value){}
                 virtual ret_ty emit(inp_ty) override { 
                         std::wcerr << L"var "<< name.str << L" = "; if(value)value->emit();else std::wcerr << L"nil";

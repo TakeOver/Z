@@ -259,7 +259,7 @@ namespace Z{
         }
         Expression* p::expectHash(){
                 tkn.Next();
-                std::vector<Token> keys;
+                std::vector<Expression*> keys;
                 std::vector<Expression*> vals;
                 while(!tkn.eof() && tkn.Last().sty!=SubTokTy::RBlock){
                         auto key = tkn.Last();
@@ -271,7 +271,7 @@ namespace Z{
                                 return nullptr;       
                         }
                         tkn.Next();
-                        keys.push_back(key);
+                        keys.push_back(new String(key));
                         if(tkn.Last().str!= L"="){
                                 for(auto&x:vals){
                                         x->FullRelease();
@@ -301,7 +301,7 @@ namespace Z{
                         return nullptr;
                 }
                 tkn.Next();
-                return new Hash(new VecHelper<Expression>(vals), keys);
+                return new Hash(new VecHelper<Expression>(vals),new VecHelper<Expression>(keys));
         }
         Expression* p::expectBlock(){
                 tkn.Next();
@@ -520,6 +520,9 @@ namespace Z{
                 tkn.Next(); // eat (
                 bool is_ell = false;
                 auto res = expectExpression();
+                if(!res){
+                        return nullptr;
+                }
                 if(tkn.Last().sty!=SubTokTy::RParen){ // tuple or lambda arrow notation
                         DBG_TRACE("%s","try lambda or tuple");
                         if(tkn.Last().sty == SubTokTy::Comma){

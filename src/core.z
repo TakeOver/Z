@@ -26,3 +26,34 @@ export reduce
 export map
 export eval
 export read
+import object
+let String = #{
+        len = Native.str.len,
+        __getindex = Native.str.charAt,
+        __setindex = Native.str.setCharAt,
+        __iter = (self)->
+                #{
+                        next = (iter)->{
+                                iter.pos = iter.pos + 1
+                                cond {
+                                        iter.pos >= self.len() => nil
+                                        true => self[iter.pos] 
+                                }
+                        }
+                        valid = iter -> iter.pos + 1 < self.len()
+                }
+}
+let Number = #{
+        times = (self,body)->
+                for i = 0 to self-1 {
+                        body(i)
+                }
+
+}
+let Expression = #{
+        append = Native.ast.append,
+        getchild = Native.ast.getchild
+}
+export String
+export Number
+export Expression

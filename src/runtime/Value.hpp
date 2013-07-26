@@ -56,6 +56,21 @@ namespace Z{
                 Value(std::vector<Value>* arr):type(ValType::Array),arr(arr){ctx=nullptr;}
                 Value(std::unordered_map<std::wstring,Value>* hash):type(ValType::Hash),hash(hash){ctx=nullptr;}
         };
+        inline std::wstring match_ty_tostr(ValType ty){
+                switch (ty){
+                        #define CASE_RET(x,y) case ValType:: x: return L## #y;
+                        CASE_RET(Hash,Object)
+                        CASE_RET(String,String)
+                        CASE_RET(Number,Number)
+                        CASE_RET(Function,Function)
+                        CASE_RET(Boolean,Boolean)
+                        CASE_RET(Expression,Expression)
+                        CASE_RET(NativeFunction,NativeFunction)
+                        CASE_RET(Array,Array)
+                        CASE_RET(Null,Null)
+                        #undef CASE_RET
+                }
+        } 
         inline void print(const Value& val, std::wostream & out = std::wcout){
                 if(val.type == ValType::Number){
                         out << val.num;

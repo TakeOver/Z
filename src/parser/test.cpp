@@ -12,6 +12,17 @@ Value input(Z::Context* ctx, const std::vector<Value>& args){
         std::getline(std::wcin,*str);
         return Value(str);
 }
+Value append(Z::Context* ctx, const std::vector<Value>& args){
+        auto self = args.front();
+        auto key = args[1];
+        auto value = args[2];
+        if(self.expr->type()==NodeTy::Hash && key.type == ValType::Expression && value.type == ValType::Expression){
+                auto hash = dynamic_cast<Hash*>(self.expr);
+                hash->keys->get().push_back(key.expr);
+                hash->arr->get().push_back(value.expr);
+        }
+        return self;
+}
 Value set(Z::Context*ctx, const std::vector<Value>&args){
         if(args.size()!=2){
                 return ctx->null;
@@ -58,6 +69,11 @@ int main(){
                 ctx->setVar(L"set!",Value(set));
                 ctx->createVar(L"parse!");
                 ctx->setVar(L"parse!",Value(parse));
+                ctx->createVar(L"Native");
+                ctx->setVar(L"Native",Value(new std::unordered_map<std::wstring, Value>({
+                        {L"ast",Value(new std::unordered_map<std::wstring, Value>({
+                                {L"append",Value(append)}}))
+                }})));
                 Z::print(&ctx->getEnv());
                 std::wcerr << L'\n';
                 ast->emit();

@@ -14,7 +14,8 @@ let Object = #{
 }
 let Class = #{
         base = Object.new(),
-        new = allocator,
+        new = (self,inherits,ast)-> 
+                self.init(inherits,ast)
         create = self -> 
                 eval!(self.class_ast),
         init = (self,inherits,ast) -> {
@@ -22,7 +23,10 @@ let Class = #{
                            ${inherits.create()})
                 ast.append(${"super"},
                            ${(self,args...)->
-                                        self.base.init(...args)})
+                                self.base.init(...args)})
+                ast.append(${"new"},
+                           ${(self,rest...)->
+                                allocator(self,...rest)})
                 self.class_ast = ast
                 self
         }
