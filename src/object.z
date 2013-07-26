@@ -3,37 +3,69 @@ let object = ${#{
 
 let allocator = (self,args...)-> {
         let obj = self.create()
+        obj.base = self.inherits.create()
         obj.init(...args)
+        obj.init = nil // TODO change to delete obj.init when delete would be implemented
+        obj.super = nil
+        obj.instance = self
         obj
 }
 let Object = #{
-        new = self -> self.init()
-        create = self -> #{}
+        base = eval! object,
+        new = self -> eval! object,
+        create = self -> eval! object,
         init = self -> 
-                #{base = eval!(object)}
+                self
 }
 let Class = #{
         base = Object.new(),
         new = (self,inherits,ast)-> 
-                self.init(inherits,ast)
-        create = self -> 
-                eval!(self.class_ast),
+                self.init(inherits,ast),
         init = (self,inherits,ast) -> {
-                ast.append(${"base"},
-                           ${inherits.create()})
-                ast.append(${"super"},
-                           ${(self,args...)->
-                                self.base.init(...args)})
-                ast.append(${"new"},
-                           ${(self,rest...)->
-                                allocator(self,...rest)})
+                ast.append("super",
+                           (self,args...)-> 
+                                let res = self.base.init(...args))
                 self.class_ast = ast
+                self.create = (self)-> 
+                        eval! self.class_ast
+                self.new = allocator
+                self.inherits = inherits
                 self
         }
 }
+let String = #{
+        len = Native.str.len,
+        __getindex = Native.str.charAt,
+        __setindex = Native.str.setCharAt,
+        __iter = (self)->
+                #{
+                        next = (iter)->{
+                                iter.pos = iter.pos + 1
+                                cond {
+                                        iter.pos >= self.len() => nil
+                                        true => self[iter.pos] 
+                                }
+                        },
+                        valid = iter -> iter.pos + 1 < self.len()
+                }
+}
+let Number = #{
+        times = (self,body)->
+                for i = 0 to self-1 {
+                        body(i)
+                }
+
+}
+let Expression = #{
+        append = Native.ast.append,
+        getchild = Native.ast.getchild
+}
+let Array = #{
+        len = String.len
+}
+export Expression
+export Number
+export String
 export Class
 export Object
-
-//let obj = Class.new(Object,${#{
-// // class %name% { %body% } is just sugar for this.
-//}})
+export Array

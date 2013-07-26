@@ -110,7 +110,7 @@ namespace Z{
                 } else if(val.type == ValType::NativeFunction){
                         out << L"<native_function>";
                 } else {
-                        out << L"<unimplemented>";
+                        out << L"<unimplemented("<< (int) val.type << L">";
                 }
         }
         inline Value getIdx(const Value& val, int64_t idx, Context * ctx){

@@ -3,8 +3,11 @@ namespace Z{
         namespace { using ctx = Context; }
                 ctx::Context(Context * parent):parent(parent){
                         parent->AddRef();
+                        this->imported_modules = parent->imported_modules;
                 }
-                ctx::Context():parent(nullptr){}
+                ctx::Context():parent(nullptr){
+                        this->imported_modules = new std::unordered_map<std::wstring, Value>();
+                }
 
                 Value ctx::RaiseException(const Value& excep){ // TODO IMPLEMENTATION
                         if(_is_try){
@@ -14,8 +17,24 @@ namespace Z{
                         exit(0);
                 }
 
-                ctx::~Context(){}
+                ctx::~Context(){
+                        if(!parent){
+                                delete this->imported_modules;
+                        }
+                }
 
+                void ctx::setModuleValue(const std::wstring&str,Value val){
+                        this->imported_modules->insert({str,val});
+                }
+                void ctx::SetTry(){
+                        _is_try = true;
+                }
+                bool ctx::is_imported(const std::wstring& name ){
+                        return this->imported_modules->find(name)!=this->imported_modules->end();
+                }
+                Value ctx::module_value(const std::wstring & name){
+                        return is_imported(name)?this->imported_modules->find(name)->second:null;
+                }
                 void ctx::Release(){
                         if(--refcnt <= 0){
                                 if(parent){

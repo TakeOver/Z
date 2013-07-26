@@ -10,16 +10,18 @@ namespace Z{
                 Context * parent;
                 std::unordered_map<std::wstring, Value> env;
                 bool _is_try = false;
+                std::unordered_map<std::wstring, Value> *imported_modules;
         public:
                 Value null;
                 Context(Context * parent);
                 Context();
                 decltype(env)& getEnv();
-                void SetTry(){
-                        _is_try = true;
-                }
+                void SetTry();
+                bool is_imported(const std::wstring & );
                 Value RaiseException(const Value& excep);
                 ~Context();
+                void setModuleValue(const std::wstring&str,Value val);
+                Value module_value(const std::wstring &);
                 void Release();
                 Context* getRoot();
                 Value& getVar(const std::wstring & name);

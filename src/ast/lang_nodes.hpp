@@ -143,16 +143,17 @@ namespace Z{
                 virtual NodeTy type() override { return NodeTy::UnOp; }
         };
         class String: public virtual Expression{
-                Token value;
+                std::wstring* value;
         public:
                 ~String() override { }
-                String(const Token& value):value(value){}
+                String(std::wstring* value):value(value){}
                 virtual ret_ty emit(inp_ty) override {
-                        std::wcerr << L"\"" << value.str << L"\"";
+                        std::wcerr << L"\"" << *value << L"\"";
                 }
                 virtual Value eval(Context*ctx)override{
-                        return Value(&value.str);       
+                        return Value(value);       
                 }
+                virtual void FullRelease() override { delete value; }
                 virtual NodeTy type() override { return NodeTy::String; }
         };
         class Boolean: public virtual Expression{
@@ -351,15 +352,15 @@ namespace Z{
                 virtual NodeTy type() override { return NodeTy::Export; }
         };
         class Number: public virtual Expression{
-                Token value;
+                double value;
         public:
                 ~Number() override { }
-                Number(const Token& value):value(value){}
+                Number(double value):value(value){}
                 virtual ret_ty emit(inp_ty) override {
-                        std::wcerr << value.str;
+                        std::wcerr << value;
                 }
                 virtual Value eval(Context*ctx)override{
-                        return Value(wcstod(value.str.c_str(),nullptr));
+                        return Value(value);
                 }
                 virtual NodeTy type() override { return NodeTy::Number; }
         };
@@ -484,6 +485,13 @@ namespace Z{
                 Import(const Token& module,bool ret_mod = false):module(module),ret_mod(ret_mod){}
                 virtual ret_ty emit(inp_ty) override { std::wcerr << L"import " << module.str; }
                 virtual Value eval(Context*ctx)override{
+                        if(ctx->is_imported(module.str)){
+                                if(ret_mod){
+                                        return ctx->module_value(module.str);
+                                }else{
+                                        return ctx->null;
+                                }
+                        }
                         char * name = new char[module.str.length()*4+10];
                         wcstombs(name, module.str.c_str(), module.str.length()*4+1);
                         strcpy(name+strlen(name),".z\0");
@@ -492,6 +500,7 @@ namespace Z{
                         if(!in){
                                 ctx->RaiseException(Value(new std::wstring(L"Failed to load module")));
                                 std::wcerr << L"Failed to load module " << module.str << L".z\n";
+                                ctx->setModuleValue(module.str, Value());
                                 return ctx->null;
                         }
                         extern Expression* Parse(const std::wstring&);
@@ -505,16 +514,18 @@ namespace Z{
                         in.close();
                         auto expr = Parse(std::wstring(buf));
                         if(!expr){
+                                ctx->setModuleValue(module.str, Value());
                                 return ctx->null;
                         }
-                        if(!ret_mod){
-                                return expr->eval(ctx);
-                        }
-                        Context * _ctx = new Context();
-                        expr->eval(_ctx);
-                        auto res = Value(new std::unordered_map<std::wstring, Value>(_ctx->getEnv()));
+                        Context * _ctx = new Context(ctx);
+                        auto res = expr->eval(_ctx);
+                        auto mod = Value(new std::unordered_map<std::wstring, Value>(_ctx->getEnv()));
                         _ctx->Release();
-                        return res;
+                        if(!ret_mod){
+                                ctx->setModuleValue(module.str,mod);
+                                return res;
+                        }
+                        return mod;
 
                 }
                 virtual NodeTy type() override { return NodeTy::Import; }
@@ -566,9 +577,11 @@ namespace Z{
                 Expression* what;
                 VecHelper<Expression> *cond;
                 VecHelper<Expression> *res;
+                Expression * default_val;
         public:
                 ~Match() override { }
-                Match(Expression*what, decltype(cond) cond, decltype(res) res):what(what),cond(cond),res(res){}
+                Match(Expression*what, decltype(cond) cond, decltype(res) res, Expression* default_val):what(what),cond(cond),
+                res(res),default_val(default_val){}
                 virtual ret_ty emit(inp_ty) override {     
                         std::wcerr << L"match!("; what->emit(); std::wcerr << L"){\n";
                         for(auto i1 = cond->get().begin(), 
@@ -580,7 +593,8 @@ namespace Z{
                                 std::wcerr << L"\t|"; (*i1)->emit(); std::wcerr << L"->"; (*i2)->emit();
                                 std::wcerr << L'\n';
                         }
-                        std::wcerr << L"}";
+                        std::wcerr << L"\t | _ => "; default_val->emit();
+                        std::wcerr << L"\n}";
                 }
                 virtual Value eval(Context*ctx)override{
                         auto pattern = what->eval(ctx);
@@ -590,7 +604,7 @@ namespace Z{
                                         return res->get()[i]->eval(ctx);
                                 }
                         }
-                        return ctx->null;
+                        return default_val->eval(ctx);
                 }
                 virtual NodeTy type() override { return NodeTy::Match; }
         };
@@ -625,8 +639,8 @@ namespace Z{
                 virtual NodeTy type() override { return NodeTy::Cond; }
         };
         class Block: public virtual Expression{
-                VecHelper<Expression>* block;
         public:
+                VecHelper<Expression>* block;
                 ~Block() override { }
                 Block(VecHelper<Expression>* block):block(block){}
                 virtual ret_ty emit(inp_ty) override {                        

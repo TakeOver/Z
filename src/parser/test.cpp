@@ -12,14 +12,45 @@ Value input(Z::Context* ctx, const std::vector<Value>& args){
         std::getline(std::wcin,*str);
         return Value(str);
 }
+Value len(Z::Context* ctx, const std::vector<Value>& args){
+        auto obj = args.front();
+        switch(obj.type){
+                case ValType::String: return Value(static_cast<double>(obj.str->length()));
+                case ValType::Array: return Value(static_cast<double>(obj.arr->size()));
+                default: return Value(0.0);
+        }
+}
+Expression* to_ast(Value val){
+        switch(val.type){
+                case ValType::Expression: return val.expr;
+                case ValType::Number: return new Number(val.num);
+                case ValType::Function: return new Lambda(val.fun->body,val.fun->args);
+                case ValType::String: return new String(val.str);
+                case ValType::Null: return new Nil();
+                case ValType::Boolean: return new Boolean((bool)val.boolv);
+                default: {
+                        std::wcerr << L"Not implemented convertion to ast\n";
+                        exit(0);
+                }
+        }
+}
 Value append(Z::Context* ctx, const std::vector<Value>& args){
         auto self = args.front();
-        auto key = args[1];
-        auto value = args[2];
-        if(self.expr->type()==NodeTy::Hash && key.type == ValType::Expression && value.type == ValType::Expression){
+        if(self.expr->type()==NodeTy::Hash){
+                if(args.size()<3){
+                        return ctx->null;
+                }
+                auto key = to_ast(args[1]);
+                auto value = to_ast(args[2]);
                 auto hash = dynamic_cast<Hash*>(self.expr);
-                hash->keys->get().push_back(key.expr);
-                hash->arr->get().push_back(value.expr);
+                hash->keys->get().push_back(key);
+                hash->arr->get().push_back(value);
+        } else if(self.expr->type() == NodeTy::Block){
+                if(args.size()<2){
+                        return ctx->null;
+                }
+                auto value = to_ast(args[1]);
+                dynamic_cast<Block*>(self.expr)->block->get().push_back(value);
         }
         return self;
 }
@@ -61,7 +92,7 @@ int main(){
         Parser par (str);
         auto ast = par.Parse();
         std::wcout << par.isSuccess() << L' ' << par.ErrorMsg() << std::endl;
-        if(par.isSuccess()){
+        if(par.isSuccess() && ast){
                 Context* ctx = new Context();
                 ctx->createVar(L"input");
                 ctx->setVar(L"input",Value(input)); 
@@ -73,10 +104,9 @@ int main(){
                 ctx->setVar(L"Native",Value(new std::unordered_map<std::wstring, Value>({
                         {L"ast",Value(new std::unordered_map<std::wstring, Value>({
                                 {L"append",Value(append)}}))
-                }})));
+                },      {L"str",Value(new std::unordered_map<std::wstring,Value>({{L"len",Value(len)}}))}})));
                 Z::print(&ctx->getEnv());
                 std::wcerr << L'\n';
-                ast->emit();
                 std::wcerr <<L'\n';
                 ast->eval(ctx);
                 std::wcout << std::endl;

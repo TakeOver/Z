@@ -40,6 +40,7 @@ namespace Z{
                 tkn.DefKw(L"if",SubTokTy::If,true);
                 tkn.DefKw(L"else",SubTokTy::Else,true);
                 tkn.DefKw(L"then",SubTokTy::Then,true);
+                tkn.DefKw(L"_",SubTokTy::Placeholder,true);
                 tkn.DefKw(L"for",SubTokTy::For,true);
                 tkn.DefKw(L"while",SubTokTy::While,true);
                 tkn.DefKw(L"cond",SubTokTy::Cond,true);
@@ -74,13 +75,13 @@ namespace Z{
         }
         String* p::expectString(){
                 DBG_TRACE();
-                auto res = new String(tkn.Last());
+                auto res = new String(new std::wstring(tkn.Last().str));
                 tkn.Next();
                 return res;
         }
         Number* p::expectNumber(){
                 DBG_TRACE();
-                auto res = new Number(tkn.Last());
+                auto res = new Number(std::wcstod(tkn.Last().str.c_str(),nullptr));
                 tkn.Next();
                 return res;
         }
@@ -151,6 +152,7 @@ namespace Z{
                         tkn.Next();
                         if(tkn.eof()){
                                 lhs->FullRelease();
+                                setError(L"Unexpected eof in binary expression",tkn.Last());
                                 return nullptr;
                         }
                         Expression* rhs;
@@ -207,7 +209,7 @@ namespace Z{
                                 }
                         }
                         if(binOp.str == L"."){
-                                String * str = new String(Token(TokTy::String,dynamic_cast<Variable*>(rhs)->getname()));
+                                String * str = new String(new std::wstring(dynamic_cast<Variable*>(rhs)->getname()));
                                 delete rhs;
                                 lhs = new BinOp(binOp, lhs, str);
                         }else if(binOp.sty == SubTokTy::LParen){
@@ -271,7 +273,7 @@ namespace Z{
                                 return nullptr;       
                         }
                         tkn.Next();
-                        keys.push_back(new String(key));
+                        keys.push_back(new String(new std::wstring(key.str)));
                         if(tkn.Last().str!= L"="){
                                 for(auto&x:vals){
                                         x->FullRelease();
@@ -517,7 +519,20 @@ namespace Z{
         }
         Expression* p::expectParen(){
                 DBG_TRACE();
-                tkn.Next(); // eat (
+                if(tkn.Next().sty == SubTokTy::RParen){
+                        //lambda without arguments
+                        if(tkn.Next().sty!=SubTokTy::Arrow){
+                                setError(L"Arrow expected after lambda arg. list(no args)",tkn.Last());
+                                return nullptr;
+                        }
+                        tkn.Next();
+                        auto body = expectExpression();
+                        if(!body){
+                                return nullptr;
+                        }
+                        return new Lambda(body,new VecHelper<Variable>({}));
+
+                }
                 bool is_ell = false;
                 auto res = expectExpression();
                 if(!res){
@@ -656,18 +671,29 @@ namespace Z{
                 tkn.Next();
                 std::vector<Expression*> cond;
                 std::vector<Expression*> res;
+                Expression* deflt = new Nil();
                 while(tkn.Last().sty!=SubTokTy::RBlock && !tkn.eof()){
-                        auto _cond = expectExpression();
-                        if(!_cond){
-                                for(auto&x:cond)x->FullRelease();
-                                for(auto&x:res)x->FullRelease();
-                                expr->FullRelease();
-                                return nullptr;
+                        bool is_deflt = false;
+                        Expression* _cond;
+                        if(tkn.Last().sty == SubTokTy::Placeholder){
+                                is_deflt = true;
+                                tkn.Next();
+                        } else {
+                                _cond = expectExpression();
+                                if(!_cond){
+                                        for(auto&x:cond)x->FullRelease();
+                                        for(auto&x:res)x->FullRelease();
+                                        expr->FullRelease();
+                                        deflt->FullRelease();
+                                        return nullptr;
+                                }
                         }
                         if(tkn.Last().sty!=SubTokTy::Arrow2){
                                 for(auto&x:cond)x->FullRelease();
                                 for(auto&x:res)x->FullRelease();
                                 expr->FullRelease();
+                                deflt->FullRelease();
+                                setError(L"=> Expected in match expression",tkn.Last());
                                 return nullptr;                                
                         }
                         tkn.Next();
@@ -676,21 +702,30 @@ namespace Z{
                                 for(auto&x:cond)x->FullRelease();
                                 for(auto&x:res)x->FullRelease();
                                 expr->FullRelease();
-                                _cond->FullRelease();
+                                deflt->FullRelease();
+                                if(!is_deflt){
+                                        _cond->FullRelease();
+                                }
                                 return nullptr;
                         }
-                        cond.push_back(_cond);
-                        res.push_back(_res);
+                        if(is_deflt){
+                                deflt->FullRelease();
+                                deflt = _res;
+                        }else{
+                                cond.push_back(_cond);
+                                res.push_back(_res);
+                        }
                 }
                 if(tkn.Last().sty!=SubTokTy::RBlock){
                                 for(auto&x:cond)x->FullRelease();
                                 for(auto&x:res)x->FullRelease();
                                 expr->FullRelease();
+                                deflt->FullRelease();
                                 setError(L"} expected in match expr",tkn.Last());
                                 return nullptr;                        
                 }
                 tkn.Next();
-                return new Match((expr), new VecHelper<Expression>(cond), new VecHelper<Expression>(res));
+                return new Match((expr), new VecHelper<Expression>(cond), new VecHelper<Expression>(res),deflt);
 
 
         }
