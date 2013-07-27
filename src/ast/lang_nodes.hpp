@@ -584,12 +584,8 @@ namespace Z{
                 Import(const Token& module,bool ret_mod = false):module(module),ret_mod(ret_mod){}
                 virtual ret_ty emit(inp_ty) override { std::wcerr << L"import " << module.str; }
                 virtual Value eval(Context*ctx)override{
-                        if(ctx->is_imported(module.str)){
-                                if(ret_mod){
-                                        return ctx->module_value(module.str);
-                                }else{
-                                        return ctx->null;
-                                }
+                        if(ctx->is_imported(module.str) && !ret_mod){
+                                return ctx->module_value(module.str);
                         }
                         char * name = new char[module.str.length()*4+10];
                         wcstombs(name, module.str.c_str(), module.str.length()*4+1);
@@ -616,14 +612,15 @@ namespace Z{
                                 ctx->setModuleValue(module.str, Value());
                                 return ctx->null;
                         }
-                        Context * _ctx = new Context(ctx);
+                        Context * _ctx = ret_mod?(new Context()):(new Context(ctx));
                         auto res = expr->eval(_ctx);
-                        auto mod = Value(new std::unordered_map<std::wstring, Value>(_ctx->getEnv()));
-                        _ctx->Release();
+                        ctx->setModuleValue(module.str,res);
                         if(!ret_mod){
-                                ctx->setModuleValue(module.str,mod);
+                                _ctx->Release();
                                 return res;
                         }
+                        auto mod = Value(new std::unordered_map<std::wstring, Value>(_ctx->getEnv()));
+                        _ctx->Release();
                         return mod;
 
                 }

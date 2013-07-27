@@ -19,7 +19,12 @@ let reduce = (func, list) -> {
                 }
         }
 }
+let compose = (fun1,fun2) -> 
+        (args...) -> 
+                fun1(fun2(...args))
+
 export reduce
 export map
 export eval
 export read
+export compose

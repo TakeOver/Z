@@ -17,9 +17,7 @@ let allocator = (self,args...)-> {
 let Object = #{
         base = eval! object,
         new = self -> eval! object,
-        create = self -> eval! object,
-        init = self -> 
-                self
+        create = self -> eval! object
 }
 let Class = #{
         base = Object.new(),
@@ -39,10 +37,10 @@ let Class = #{
         }
 }
 let String = #{
-        base = eval! object,
+        base = Object.create(),
         new = self-> "",
-        init = self-> self,
         create = self -> "",
+        super = self-> self.base.init(),
         len = Native.str.len,
         __getindex = Native.str.charAt,
         __setindex = Native.str.setCharAt,
@@ -58,9 +56,8 @@ let String = #{
                 }
 }
 let Number = #{
-        base = eval! object,
+        base = Object.create(),
         new = self-> 0,
-        init = self-> self,
         create = self -> 0,
         times = (self,body)->
                 for i = 0 to self-1
@@ -68,17 +65,15 @@ let Number = #{
 
 }
 let Expression = #{
-        base = eval! object,
+        base = Object.create(),
         new = self-> ${{}},
-        init = self-> self,
         create = self -> ${{}},
         append = Native.ast.append,
         getchild = Native.ast.getchild
 }
 let Array = #{
-        base = eval! object,
+        base = Object.create(),
         new = self-> [],
-        init = self-> self,
         create = self -> [],
         len = String.len
 }
