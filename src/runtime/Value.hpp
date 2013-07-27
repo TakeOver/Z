@@ -141,6 +141,15 @@ namespace Z{
                 if(val.type!=ValType::Hash){
                         return Value();
                 }
+                if(val.hash->find(key)==val.hash->end()){
+                        auto getter = val.hash->find(L"$system_getter");
+                        if(getter == val.hash->end() || (getter->second.type!=ValType::Function && getter->second.type!=ValType::NativeFunction)){
+                                return Value();
+                        }
+                        auto fget = getter->second;
+                        extern Value fcall(Value,const std::vector<Value>&,Context*);
+                        return fcall(fget,{val,Value(new std::wstring(key))},ctx);
+                }
                 return (*val.hash)[key];
         }
         inline void setKey(const Value& val, const std::wstring& key, const Value& what, Context * ctx){

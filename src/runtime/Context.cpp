@@ -22,7 +22,16 @@ namespace Z{
                                 delete this->imported_modules;
                         }
                 }
-
+                bool ctx::deleteVar(const std::wstring& name){
+                        if(env.find(name)!=env.end()){
+                                env.erase(name);
+                                return true;
+                        }
+                        if(!parent){
+                                return false;
+                        }
+                        return parent->deleteVar(name);
+                }
                 void ctx::setModuleValue(const std::wstring&str,Value val){
                         this->imported_modules->insert({str,val});
                 }

@@ -81,8 +81,38 @@ Value parse(Z::Context*ctx, const std::vector<Value>&args){
         }
         return Value(ast,ctx);
 }
+namespace Z{Value fcall(Value fun,const std::vector<Value> & _args,Context *ctx){
+        if(fun.type==ValType::NativeFunction){
+                return fun.native(ctx,_args);
+        }
+        if(fun.type!=ValType::Function){
+                return ctx->null;
+        }
+        Context* _ctx = new Context(fun.fun->ctx);
+        auto& vars = fun.fun->args->get();
+        bool ell = fun.fun->is_ellipsis;
+        for(uint j = 0; j<_args.size();++j){
+                if(j+1==vars.size() && ell){
+                        std::vector<Value>* rest = new std::vector<Value>();
+                        for(uint k = j; k<_args.size();++k){
+                                rest->push_back(_args[k]);
+                        }
+                        _ctx->createVar(vars.back()->getname());
+                        _ctx->setVar(vars.back()->getname(), Value(rest));
+                        break;
+                }
+                if(j>=vars.size()){
+                        break;
+                }
+                _ctx->createVar(vars[j]->getname());
+                _ctx->setVar(vars[j]->getname(),_args[j]);
+        }
+        auto res = fun.fun->body->eval(_ctx);
+        _ctx->Release();
+        return res;
+}}
 int main(){
-        std::wstring str =L"{\n",tmp, at_end = L"nil";
+        std::wstring str =L"{\n import core; \n",tmp, at_end = L"nil";
         while(!std::cin.eof()){
                 std::getline(std::wcin,tmp);
                 if(tmp == L"run!")break;
@@ -107,10 +137,11 @@ int main(){
                 },      {L"str",Value(new std::unordered_map<std::wstring,Value>({{L"len",Value(len)}}))}})));
                 Z::print(&ctx->getEnv());
                 std::wcerr << L'\n';
+                ast->emit();
                 std::wcerr <<L'\n';
                 ast->eval(ctx);
                 std::wcout << std::endl;
                 ctx->Release();
-                ast->FullRelease();
+             //   ast->FullRelease();
         }
 }

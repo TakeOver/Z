@@ -32,8 +32,10 @@ namespace Z{
                 is_right_assoc.insert(L"=");
                 tkn.DefKw(L",",SubTokTy::Comma,true);
                 tkn.DefKw(L";",SubTokTy::Semicolon,true);
+                tkn.DefKw(L"class",SubTokTy::Class,true);
                 tkn.DefKw(L"...",SubTokTy::Ellipsis,true);
                 tkn.DefKw(L"eval!",SubTokTy::Eval,true);
+                tkn.DefKw(L"delete",SubTokTy::Delete,true);
                 tkn.DefKw(L"export",SubTokTy::Export,true);
                 tkn.DefKw(L"match",SubTokTy::Match,true);
                 tkn.DefKw(L"as",SubTokTy::As,true);
@@ -51,6 +53,7 @@ namespace Z{
                 tkn.DefKw(L"false",SubTokTy::False,true);
                 tkn.DefKw(L"nil",SubTokTy::Nil,true);
                 tkn.DefKw(L"import",SubTokTy::Import,true);
+                tkn.DefKw(L"extends",SubTokTy::Extends,true);
                 tkn.DefKw(L"let",SubTokTy::Let,true);
                 tkn.DefKw(L"var",SubTokTy::Var,true);
                 tkn.DefKw(L"->",SubTokTy::Arrow,true);
@@ -393,6 +396,39 @@ namespace Z{
                                                         cond->FullRelease();
                                                 }
                                                 return new While(cond,body);
+                                        }
+                                        case SubTokTy::Class: {
+                                                if(tkn.Next().ty!=TokTy::Identifer){
+                                                        setError(L"Identifer expected in class sugar syntax",tkn.Last());
+                                                }
+                                                auto name = tkn.Last();
+                                                Variable* base = new Variable(Token(TokTy::Identifer,L"Object"));
+                                                if(tkn.Next().sty == SubTokTy::Extends){
+                                                        if(tkn.Next().ty!=TokTy::Identifer){
+                                                                delete base;
+                                                                setError(L"Identifer expected as inherit arguments in class sugar syntax",tkn.Last());
+                                                                return nullptr;
+                                                        }
+                                                        base->name = tkn.Last();
+                                                        tkn.Next();
+                                                }
+                                                auto body = expectHash();
+                                                if(!body){
+                                                        return nullptr;
+                                                }
+                                                return new Let(name,
+                                                                new FCall(new BinOp(Token(TokTy::Operator,L".",0,0), 
+                                                                          new Variable(Token(TokTy::Identifer,L"Class",0,0)),
+                                                                          new String(new std::wstring(L"new"))),
+                                                                new VecHelper<Expression>({base,new AstNodeExpr(body)})));
+                                        }
+                                        case SubTokTy::Delete: {
+                                                tkn.Next();
+                                                auto expr = expectExpression();
+                                                if(!expr){
+                                                        return nullptr;
+                                                }
+                                                return new Delete(expr);
                                         }
                                         case SubTokTy::For: return expectFor();
                                         case SubTokTy::Quasi:{

@@ -1,13 +1,17 @@
 let object = ${#{
 }}
+let system_getter = (self,what)->
+        self.base[what]
 
 let allocator = (self,args...)-> {
         let obj = self.create()
         obj.base = self.inherits.create()
         obj.init(...args)
-        obj.init = nil // TODO change to delete obj.init when delete would be implemented
+        delete obj.init
+        delete obj.super
         obj.super = nil
         obj.instance = self
+        obj["$system_getter"] = system_getter
         obj
 }
 let Object = #{
@@ -19,12 +23,13 @@ let Object = #{
 }
 let Class = #{
         base = Object.new(),
-        new = (self,inherits,ast)-> 
-                self.init(inherits,ast),
-        init = (self,inherits,ast) -> {
+        new = (self,inherits,ast) -> {                
+                self = #{
+                        base = Class
+                }
                 ast.append("super",
                            (self,args...)-> 
-                                let res = self.base.init(...args))
+                                self.base.init(...args))
                 self.class_ast = ast
                 self.create = (self)-> 
                         eval! self.class_ast
@@ -34,12 +39,15 @@ let Class = #{
         }
 }
 let String = #{
+        base = eval! object,
+        new = self-> "",
+        init = self-> self,
+        create = self -> "",
         len = Native.str.len,
         __getindex = Native.str.charAt,
         __setindex = Native.str.setCharAt,
-        __iter = (self)->
-                #{
-                        next = (iter)->{
+        __iter = (self)-> #{
+                        next = iter->{
                                 iter.pos = iter.pos + 1
                                 cond {
                                         iter.pos >= self.len() => nil
@@ -50,17 +58,28 @@ let String = #{
                 }
 }
 let Number = #{
+        base = eval! object,
+        new = self-> 0,
+        init = self-> self,
+        create = self -> 0,
         times = (self,body)->
-                for i = 0 to self-1 {
+                for i = 0 to self-1
                         body(i)
-                }
 
 }
 let Expression = #{
+        base = eval! object,
+        new = self-> ${{}},
+        init = self-> self,
+        create = self -> ${{}},
         append = Native.ast.append,
         getchild = Native.ast.getchild
 }
 let Array = #{
+        base = eval! object,
+        new = self-> [],
+        init = self-> self,
+        create = self -> [],
         len = String.len
 }
 export Expression

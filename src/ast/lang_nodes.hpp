@@ -116,6 +116,11 @@ namespace Z{
                         }
                         return ctx->null;
                 }
+                void FullRelease()override{ 
+                        lhs->FullRelease(); 
+                        rhs->FullRelease();
+                        delete this; 
+                }
                 virtual NodeTy type() override { return NodeTy::BinOp; }
         };
         class UnOp: public virtual Expression{
@@ -140,6 +145,10 @@ namespace Z{
                         }
                         return Value();
                 }
+                void FullRelease()override{ 
+                        lhs->FullRelease(); 
+                        delete this; 
+                }
                 virtual NodeTy type() override { return NodeTy::UnOp; }
         };
         class String: public virtual Expression{
@@ -153,7 +162,10 @@ namespace Z{
                 virtual Value eval(Context*ctx)override{
                         return Value(value);       
                 }
-                virtual void FullRelease() override { delete value; }
+                virtual void FullRelease() override { 
+                        delete value; 
+                        delete this; 
+                }
                 virtual NodeTy type() override { return NodeTy::String; }
         };
         class Boolean: public virtual Expression{
@@ -181,6 +193,49 @@ namespace Z{
                 }
                 virtual NodeTy type() override { return NodeTy::Nil; }
         };
+        class Delete: public virtual Expression{
+                Expression* what;
+        public:
+                ~Delete() override { }
+                Delete(Expression*what):what(what){}
+                virtual ret_ty emit(inp_ty) override {
+                        std::wcerr << (L"delete"); 
+                        what->emit();
+                }
+                virtual Value eval(Context*ctx)override{
+                        switch(what->type()){
+                                case NodeTy::BinOp: {
+                                        auto bop = dynamic_cast<BinOp*>(what);
+                                        if(bop->op.str == L"." || bop->op.str == L"["){
+                                                auto obj = bop->lhs->eval(ctx), 
+                                                        key = bop->rhs->eval(ctx);
+                                                if(obj.type!=ValType::Hash){
+                                                        goto otherwise;
+                                                }
+                                                if(key.type!=ValType::String){
+                                                        return obj;
+                                                }
+                                                obj.hash->erase(*key.str);
+                                                return obj;
+                                        }
+                                        goto otherwise;
+                                }
+                                case NodeTy::Variable: {
+                                        auto var = dynamic_cast<Variable*>(what);
+                                        ctx->deleteVar(var->getname());
+                                        return ctx->null;
+                                }
+                                default: goto otherwise;
+                        }
+                        otherwise:
+                        return ctx->null;
+                }
+                void FullRelease()override{ 
+                        what->FullRelease(); 
+                        delete this; 
+                }
+                virtual NodeTy type() override { return NodeTy::Delete; }
+        };
         class Ellipsis: public virtual Expression{
                 Expression* what;
         public:
@@ -195,6 +250,10 @@ namespace Z{
                                 return Value(new std::vector<Value>());
                         }
                         return ell;
+                }
+                void FullRelease()override{ 
+                        what->FullRelease(); 
+                        delete this; 
                 }
                 virtual NodeTy type() override { return NodeTy::Ellipsis; }
         };
@@ -240,10 +299,18 @@ namespace Z{
 
 
                 }
+                void FullRelease()override{ 
+                        body->FullRelease(); 
+                        from->FullRelease(); 
+                        to->FullRelease(); 
+                        delete this; 
+                        delete var; 
+                }
                 virtual NodeTy type() override { return NodeTy::For; }
         };
         class While: public virtual Expression{
-                Expression* cond, *body;
+                Expression *cond, 
+                           *body;
         public:
                 ~While() override { }
                 While(decltype(cond) cond,decltype(body) body):cond(cond),body(body){}
@@ -259,6 +326,11 @@ namespace Z{
                         }
                         _ctx->Release();
                         return res;
+                }
+                void FullRelease()override{ 
+                        body->FullRelease(); 
+                        cond->FullRelease();
+                        delete this; 
                 }
                 virtual NodeTy type() override { return NodeTy::While; }
         };
@@ -284,6 +356,10 @@ namespace Z{
                                 ++it;
                         }
                         return Value(array);
+                }
+                void FullRelease()override{ 
+                        arr->FullRelease(); 
+                        delete this; 
                 }
                 virtual NodeTy type() override { return NodeTy::Array; }
         };
@@ -313,6 +389,11 @@ namespace Z{
                         }
                         return Value(hash);
                 }
+                void FullRelease()override{ 
+                        arr->FullRelease(); 
+                        keys->FullRelease();
+                        delete this; 
+                }
                 virtual NodeTy type() override { return NodeTy::Hash; }
         };
         class Show: public virtual Expression{
@@ -331,6 +412,10 @@ namespace Z{
                                 std::wcout << L'\n';
                         }
                         return val;
+                }
+                void FullRelease()override{ 
+                        what->FullRelease(); 
+                        delete this; 
                 }
                 virtual NodeTy type() override { return NodeTy::Show; }
         };
@@ -383,6 +468,11 @@ namespace Z{
                         body->emit();
                 }
 
+                void FullRelease()override{ 
+                        args->FullRelease(); 
+                        body->FullRelease();
+                        delete this; 
+                }
                 virtual Value eval(Context*ctx)override{
                         ctx->AddRef();
                         return Value(new Function(ctx,args,body,is_ellipsis));       
@@ -464,6 +554,11 @@ namespace Z{
                         return res;
                 }
                 virtual NodeTy type() override { return NodeTy::FCall; }
+                void FullRelease()override{  
+                        args->FullRelease(); 
+                        func->FullRelease(); 
+                        delete this; 
+                }
         };
 
         class Expr: public virtual Expression{
@@ -476,6 +571,10 @@ namespace Z{
                         return expr->eval(ctx);
                 }
                 virtual NodeTy type() override { return NodeTy::Expr; }
+                void FullRelease()override{ 
+                        expr->FullRelease(); 
+                        delete this; 
+                }
         };
         class Import: public virtual Expression{
                 Token module;
@@ -606,6 +705,13 @@ namespace Z{
                         }
                         return default_val->eval(ctx);
                 }
+                void FullRelease()override{ 
+                        what->FullRelease();
+                        cond->FullRelease();
+                        res->FullRelease();
+                        default_val->FullRelease(); 
+                        delete this; 
+                }
                 virtual NodeTy type() override { return NodeTy::Match; }
         };
         class Cond: public virtual Expression{
@@ -635,6 +741,11 @@ namespace Z{
                                 }
                         }
                         return ctx->null;
+                }
+                void FullRelease()override{ 
+                        res->FullRelease();
+                        cond->FullRelease(); 
+                        delete this; 
                 }
                 virtual NodeTy type() override { return NodeTy::Cond; }
         };
@@ -682,6 +793,10 @@ namespace Z{
                         ctx->setVar(name.str,val = value->eval(ctx));
                         return val;
                 }
+                void FullRelease()override{ 
+                        value->FullRelease(); 
+                        delete this; 
+                }
                 virtual NodeTy type() override { return NodeTy::Let; }
         };
         class Var: public virtual Expression{
@@ -701,6 +816,10 @@ namespace Z{
                         Value val;
                         ctx->setVar(name.str,val = value->eval(ctx));
                         return val;
+                }
+                void FullRelease()override{ 
+                        value->FullRelease(); 
+                        delete this; 
                 }
                 virtual NodeTy type() override { return NodeTy::Var; }
         };

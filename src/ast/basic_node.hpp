@@ -24,6 +24,7 @@ namespace Z{
                 Var,
                 EvalExpr,
                 Import,
+                Delete,
                 Boolean,
                 Nil,
                 Export,
@@ -47,11 +48,17 @@ namespace Z{
                 uint64_t _reg = 0;
                 std::vector<K*> container;
         public:
-                ~VecHelper() override { for(auto&x:container)x->FullRelease(); }
+                ~VecHelper() override { }
                 VecHelper(const std::vector<K*>& v):container(v){}
                 virtual ret_ty emit(inp_ty) override {}
                 virtual Value eval(Context* ctx){ return ctx->null; };
                 virtual NodeTy type() override { return NodeTy::VecHelper; }
+                void FullRelease() override {
+                        for(auto&x:container){
+                                x->FullRelease();
+                        }
+                        delete this;
+                }
                 std::vector<K*>& get(){return container;}
         };
 }

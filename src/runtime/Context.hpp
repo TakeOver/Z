@@ -17,6 +17,7 @@ namespace Z{
                 Context();
                 decltype(env)& getEnv();
                 void SetTry();
+                bool deleteVar(const std::wstring&);
                 bool is_imported(const std::wstring & );
                 Value RaiseException(const Value& excep);
                 ~Context();
