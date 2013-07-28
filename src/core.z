@@ -1,12 +1,17 @@
 import object
-let eval = (what)-> eval! parse! (what)
-let read = () -> parse!(input())
+let eval = (what) -> 
+        eval!(parse!(what))
+
+let read! = () -> 
+        parse!(input())
+
 let map = (func, list) -> {
         var res = []
         for i = 0 to list.len()-1 
                 res[i] = func(list[i])
         res
 }
+
 let reduce = (func, list) -> {
         let len = list.len()
         match len {
@@ -23,8 +28,20 @@ let compose = (fun1,fun2) ->
         (args...) -> 
                 fun1(fun2(...args))
 
+let bind = (self,method) -> 
+        (args...) ->
+                method(self,...args)
+
+let for_each = (list,func) -> {
+        for i = 0 to list.len()-1 
+                func(list[i],i)
+}
+String.each = Array.each = for_each
+
+export for_each
 export reduce
 export map
 export eval
 export read
 export compose
+export bind

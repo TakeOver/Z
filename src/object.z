@@ -1,15 +1,16 @@
 let object = ${#{
+        nil? = false
 }}
 let system_getter = (self,what)->
         self.base[what]
 
 let allocator = (self,args...)-> {
         let obj = self.create()
-        obj.base = self.inherits.create()
+        obj.super = (obj,args...)->
+                obj.base = self.inherits.new(...args)
         obj.init(...args)
         delete obj.init
         delete obj.super
-        obj.super = nil
         obj.instance = self
         obj["$system_getter"] = system_getter
         obj
@@ -17,7 +18,8 @@ let allocator = (self,args...)-> {
 let Object = #{
         base = eval! object,
         new = self -> eval! object,
-        create = self -> eval! object
+        create = self -> eval! object,
+        nil? = false
 }
 let Class = #{
         base = Object.new(),
@@ -25,16 +27,14 @@ let Class = #{
                 self = #{
                         base = Class
                 }
-                ast.append("super",
-                           (self,args...)-> 
-                                self.base.init(...args))
                 self.class_ast = ast
                 self.create = (self)-> 
                         eval! self.class_ast
                 self.new = allocator
                 self.inherits = inherits
                 self
-        }
+        },
+        nil? = false
 }
 let String = #{
         base = Object.create(),
@@ -53,7 +53,8 @@ let String = #{
                                 }
                         },
                         valid = iter -> iter.pos + 1 < self.len()
-                }
+                },
+        nil? = false
 }
 let Number = #{
         base = Object.create(),
@@ -61,7 +62,8 @@ let Number = #{
         create = self -> 0,
         times = (self,body)->
                 for i = 0 to self-1
-                        body(i)
+                        body(i),
+        nil? = false
 
 }
 let Expression = #{
@@ -69,13 +71,35 @@ let Expression = #{
         new = self-> ${{}},
         create = self -> ${{}},
         append = Native.ast.append,
-        getchild = Native.ast.getchild
+        getchild = Native.ast.getchild,
+        nil? = false
 }
 let Array = #{
         base = Object.create(),
         new = self-> [],
         create = self -> [],
-        len = String.len
+        len = String.len,
+        nil? = false
+}
+let __instanceof = (derived,base) -> {
+        while derived.base!=nil and derived.instance!=base
+                derived = derived.base
+        return derived.instance == base
+}
+let Nil = #{
+        base = Object.new()
+        nil? = true
+}
+let __jstypeof = self-> {
+        match __typeof(self) {
+                String     => "String"
+                Object     => "Object"
+                Number     => "Number"
+                Nil        => "Nil"
+                Expression => "Expression"
+                Array      => "Array"
+                _          => "$Error"
+        }
 }
 export Expression
 export Number
