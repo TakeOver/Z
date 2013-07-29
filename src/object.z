@@ -1,5 +1,5 @@
 let object = ${#{
-        nil? = false
+        is_nil = false
 }}
 let system_getter = (self,what)->
         self.base[what]
@@ -17,9 +17,8 @@ let allocator = (self,args...)-> {
 }
 let Object = #{
         base = eval! object,
-        new = self -> eval! object,
-        create = self -> eval! object,
-        nil? = false
+        new = allocator,
+        create = self -> eval! object
 }
 let Class = #{
         base = Object.new(),
@@ -33,8 +32,7 @@ let Class = #{
                 self.new = allocator
                 self.inherits = inherits
                 self
-        },
-        nil? = false
+        }
 }
 let String = #{
         base = Object.create(),
@@ -53,8 +51,7 @@ let String = #{
                                 }
                         },
                         valid = iter -> iter.pos + 1 < self.len()
-                },
-        nil? = false
+                }
 }
 let Number = #{
         base = Object.create(),
@@ -62,33 +59,29 @@ let Number = #{
         create = self -> 0,
         times = (self,body)->
                 for i = 0 to self-1
-                        body(i),
-        nil? = false
-
+                        body(i)
 }
 let Expression = #{
         base = Object.create(),
         new = self-> ${{}},
         create = self -> ${{}},
         append = Native.ast.append,
-        getchild = Native.ast.getchild,
-        nil? = false
+        getchild = Native.ast.getchild
 }
 let Array = #{
         base = Object.create(),
         new = self-> [],
         create = self -> [],
-        len = String.len,
-        nil? = false
+        len = String.len
 }
 let __instanceof = (derived,base) -> {
-        while derived.base!=nil and derived.instance!=base
+        while derived.base != nil and derived.instance != base
                 derived = derived.base
-        return derived.instance == base
+        derived.instance == base
 }
 let Nil = #{
-        base = Object.new()
-        nil? = true
+        base = Object.new(),
+        is_nil = true
 }
 let __jstypeof = self-> {
         match __typeof(self) {
@@ -101,9 +94,17 @@ let __jstypeof = self-> {
                 _          => "$Error"
         }
 }
+Class["$system_getter"] = system_getter
+Object["$system_getter"]=system_getter
+Number["$system_getter"]=system_getter
+Array["$system_getter"]=system_getter
+String["$system_getter"]=system_getter
+Expression["$system_getter"]=system_getter
+Nil["$system_getter"]=system_getter
 export Expression
 export Number
 export String
 export Class
 export Object
 export Array
+export Nil

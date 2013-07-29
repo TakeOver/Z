@@ -108,6 +108,9 @@ namespace Z{
                                 }
                                 if(lhs->type()!=NodeTy::Variable){
                                         std::wcerr << L"Variable expected as LHS\n";
+                                        lhs->emit(); 
+                                        std::wcerr << op.str;
+                                        rhs->emit();
                                         return ctx->null;
                                 }
                                 Value val;
@@ -561,21 +564,6 @@ namespace Z{
                 }
         };
 
-        class Expr: public virtual Expression{
-                Expression* expr;
-        public:
-                ~Expr() override { }
-                Expr(Expression* expr):expr(expr){}
-                virtual ret_ty emit(inp_ty) override { expr->emit(); }
-                virtual Value eval(Context*ctx)override{
-                        return expr->eval(ctx);
-                }
-                virtual NodeTy type() override { return NodeTy::Expr; }
-                void FullRelease()override{ 
-                        expr->FullRelease(); 
-                        delete this; 
-                }
-        };
         class Import: public virtual Expression{
                 Token module;
                 bool ret_mod;
@@ -782,7 +770,8 @@ namespace Z{
                 ~Let() override { }
                 Let(const Token& name, Expression* value):name(name),value(value){}
                 virtual ret_ty emit(inp_ty) override { 
-                        std::wcerr << L"let "<< name.str << L" = "; value->emit();
+                        std::wcerr << L"let "<< name.str << L" = "; 
+                        value->emit();
                 }
                 virtual Value eval(Context*ctx)override{
                         ctx->createVar(name.str);
@@ -803,7 +792,12 @@ namespace Z{
                 ~Var() override { }
                 Var(const Token& name, Expression* value):name(name),value(value){}
                 virtual ret_ty emit(inp_ty) override { 
-                        std::wcerr << L"var "<< name.str << L" = "; if(value)value->emit();else std::wcerr << L"nil";
+                        std::wcerr << L"var "<< name.str << L" = "; 
+                        if(value){
+                                value->emit();
+                        } else {
+                                std::wcerr << L"nil";
+                        }
                 }
                 virtual Value eval(Context*ctx)override{
                         ctx->createVar(name.str);

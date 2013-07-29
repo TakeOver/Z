@@ -36,7 +36,7 @@ let for_each = (list,func) -> {
         for i = 0 to list.len()-1 
                 func(list[i],i)
 }
-String.each = Array.each = for_each
+String.each = (Array.each = for_each)
 
 export for_each
 export reduce
