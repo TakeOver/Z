@@ -23,7 +23,7 @@ let Object = #{
 }
 let Class = #{
         base = Object.new(),
-        new = (self,inherits,ast) -> {                
+        new = (self,inherits,ast) -> {       
                 self = #{
                         base = Class
                 }

@@ -349,7 +349,7 @@ namespace Z{
                         switch(what->type()){
                                 case NodeTy::BinOp: {
                                         auto bop = dynamic_cast<BinOp*>(what);
-                                        if(bop->op == L"operator@." || bop->op == L"operator@["){
+                                        if(bop->op == L"binary@." || bop->op == L"binary@["){
                                                 auto obj = bop->lhs->eval(ctx), 
                                                         key = bop->rhs->eval(ctx);
                                                 if(obj->type()!=NodeTy::Hash){
@@ -433,7 +433,7 @@ namespace Z{
                                 step=-step;
                         }
                         Expression* res;
-                        auto less_eq = ctx->findBuiltinOp(L"operator@<=");
+                        auto less_eq = ctx->findBuiltinOp(L"binary@<=");
                         if(!less_eq){
                                 return ctx->nil;
                         }
@@ -673,7 +673,8 @@ namespace Z{
                         Expression* fun;
                         std::vector<Expression*> _args;
                         BinOp *obj = func->as<BinOp>();
-                        if(obj && (obj->op == L"operator@.")){
+                        if(obj && (obj->op == L"binary@.")){
+                                DBG_TRACE("object found");
                                 auto    _obj = obj->lhs->eval(ctx), 
                                         _key = obj->rhs->eval(ctx), __obj = _obj;
                                 if(_obj->type()!=NodeTy::Hash){
@@ -688,7 +689,7 @@ namespace Z{
                                 fun = func->eval(ctx);
                         }
                         for(auto&x:args->get()){
-                                if(dynamic_cast<Ellipsis*>(x)!=0){
+                                if(dynamic_cast<Ellipsis*>(x)!=nullptr){
                                         auto ell = x->eval(ctx);
                                         for(auto&y:*dynamic_cast<Array*>(ell)->value){
                                                 _args.push_back(y);
@@ -736,7 +737,7 @@ namespace Z{
                                 return ctx->nil;
                         }
                         extern Expression* Parse(const std::wstring&);
-                        std::wstring buf = L"{", // no global variables :)
+                        std::wstring buf = L"{\n", // no global variables :)
                                         tmp;
                         while(!in.eof()){
                                 std::getline(in,tmp);
@@ -790,7 +791,7 @@ namespace Z{
                 virtual Expression* eval(Context*ctx)override{
                         DBG_TRACE();
                         auto pattern = what->eval(ctx);
-                        auto equal = ctx->findBuiltinOp(L"operator@==");
+                        auto equal = ctx->findBuiltinOp(L"binary@==");
                         if(!equal){
                                 return ctx->nil;
                         }

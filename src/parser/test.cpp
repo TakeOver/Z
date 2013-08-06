@@ -196,8 +196,48 @@ Expression* _index(Z::Context* ctx, const std::vector<Expression*>&args){
         return obj->as<Array>()->get(ctx,std::floor(key->as<Number>()->value));
 
 }
+Expression* _assign(Z::Context* ctx, const std::vector<Expression*>&args){
+        if(args.size()!=2){
+                return ctx->nil;
+        }
+        auto lvalue = args.front(); // no eval!
+        auto rvalue = args.back()->eval(ctx);
+        switch(lvalue->type()){
+                case NodeTy::Variable:{
+                        ctx->setVar(lvalue->as<Variable>()->getname(), rvalue);
+                        return rvalue;
+                }
+                case NodeTy::BinOp:{
+                        auto bin = lvalue->as<BinOp>();
+                        if(bin->op == L"binary@." || bin->op == L"binary@["){
+                                auto lhs = bin->lhs->eval(ctx), 
+                                        rhs = bin->rhs->eval(ctx);
+                                auto hash = lhs->as<Hash>();
+                                auto keystr = rhs->as<String>();
+                                if(hash && keystr){
+                                        hash->set(ctx,*keystr->value,rvalue);
+                                        return rvalue;
+                                }
+                                auto array = lhs->as<Array>();
+                                auto index = rhs->as<Number>();
+                                if(array && index){
+                                        array->set(ctx,std::floor(index->value),rvalue);
+                                        return rvalue;
+                                }
+                                return rvalue;
+                        }
+                        lvalue->eval(ctx); // like imperative langs;
+                        return ctx->nil;                        
+                }
+                default: {
+                        lvalue->eval(ctx);
+                        return rvalue;
+                }
+        }
+
+}
 int main(){
-        std::wstring str =L"{\n //import core; \n",tmp, at_end = L"nil";
+        std::wstring str =L"{\nimport object; \n",tmp, at_end = L"nil";
         while(!std::cin.eof()){
                 std::getline(std::wcin,tmp);
                 if(tmp == L"run!")break;
@@ -227,6 +267,7 @@ int main(){
                 ctx->defBuiltinOp(L"unary@!",_not);
                 ctx->defBuiltinOp(L"binary@[",_index);
                 ctx->defBuiltinOp(L"binary@.",_index);
+                ctx->defBuiltinOp(L"binary@=",_assign);
                 ctx->createVar(L"input");
                 ctx->setVar(L"input",new NativeFunction(input)); 
                 ctx->createVar(L"show!");

@@ -61,7 +61,7 @@ namespace Z{
                 }
                 return nil;
         }
-        Context* Context::getRoot(){ return parent; }
+        Context* Context::getRoot(){ return parent?parent->getRoot():this; }
         Expression*& Context::getVar(const std::wstring& key){
                 if ( contains(*env,key) ) {
                         return env->find(key)->second;

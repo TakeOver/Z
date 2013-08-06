@@ -1,4 +1,3 @@
-import object
 let eval = (what) -> 
         eval!(parse!(what))
 
