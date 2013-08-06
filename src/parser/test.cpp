@@ -33,7 +33,7 @@ Expression* eval(Context* ctx, const std::vector<Expression*>& args){
         auto expr = args.front()->eval(ctx);
         auto ast = expr->as<AstNode>();
         if(ast){
-                return ast->eval(ast->_ctx);
+                return ast->expr->eval(ast->_ctx);
         }
         return expr;
 }
