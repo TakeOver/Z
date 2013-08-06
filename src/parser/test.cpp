@@ -16,14 +16,18 @@ extern void print(Expression*what){
 Expression* show(Context* ctx, const std::vector<Expression*>& args){
         DBG_TRACE();
         for(auto&x:args){
-                x->eval(ctx)->emit();
+                auto y = x->eval(ctx);
+                if(y->type()==NodeTy::String){
+                        std::wcout << *y->as<String>()->value;
+                }else{
+                        y->emit();
+                }
         }
         return ctx->nil;
 }
 Expression* eval(Context* ctx, const std::vector<Expression*>& args){
         DBG_TRACE();
         if(args.size()!=1){
-                std::wcerr << L"Args != 1 [eval!:native]\n";
                 return ctx->nil;
         }
         auto expr = args.front()->eval(ctx);
@@ -137,7 +141,19 @@ defop(mul,*,Number);
                 }\
                 auto lhs = args.front()->eval(ctx),\
                         rhs = args.back()->eval(ctx);\
-                return new Boolean(::to_bool(lhs) op ::to_bool(rhs));\
+                if(lhs->type()!=rhs->type()){\
+                        return new Boolean(int(lhs->type()) op int(rhs->type()));\
+                }\
+                if(lhs->type() == NodeTy::Number){\
+                        return new Boolean(lhs->as<Number>()->value op rhs->as<Number>()->value);\
+                }\
+                if(lhs->type() == NodeTy::Boolean){\
+                        return new Boolean(lhs->as<Boolean>()->value op rhs->as<Boolean>()->value);\
+                }\
+                if(lhs->type() == NodeTy::String){\
+                        return new Boolean(*lhs->as<String>()->value op *rhs->as<String>()->value);    \
+                }\
+                return new Boolean(lhs op rhs);\
         }
 defop(less,<);
 defop(less_eq,<=);
@@ -237,60 +253,67 @@ Expression* _assign(Z::Context* ctx, const std::vector<Expression*>&args){
 
 }
 int main(){
-        std::wstring str =L"{\nimport object; \n",tmp, at_end = L"nil";
-        while(!std::cin.eof()){
-                std::getline(std::wcin,tmp);
-                if(tmp == L"run!")break;
-                str+=tmp + L'\n';
+        Context* ctx = new Context(new Nil());
+        ctx->defBuiltinOp(L"binary@+",add);
+        ctx->defBuiltinOp(L"binary@-",sub);
+        ctx->defBuiltinOp(L"binary@/",div);
+        ctx->defBuiltinOp(L"binary@*",mul);
+        ctx->defBuiltinOp(L"binary@<",less);
+        ctx->defBuiltinOp(L"binary@<=",less_eq);
+        ctx->defBuiltinOp(L"binary@>",great);
+        ctx->defBuiltinOp(L"binary@>=",great_eq);
+        ctx->defBuiltinOp(L"binary@==",equal);
+        ctx->defBuiltinOp(L"binary@!=",nonequal);
+        ctx->defBuiltinOp(L"binary@and",_and);
+        ctx->defBuiltinOp(L"binary@or",_or);
+        ctx->defBuiltinOp(L"unary@not",_not);
+        ctx->defBuiltinOp(L"binary@&&",_and);
+        ctx->defBuiltinOp(L"binary@||",_or);
+        ctx->defBuiltinOp(L"unary@!",_not);
+        ctx->defBuiltinOp(L"binary@[",_index);
+        ctx->defBuiltinOp(L"binary@.",_index);
+        ctx->defBuiltinOp(L"binary@=",_assign);
+        ctx->createVar(L"input");
+        ctx->setVar(L"input",new NativeFunction(input)); 
+        ctx->createVar(L"show!");
+        ctx->setVar(L"show!",new NativeFunction(show)); 
+        ctx->createVar(L"eval!");
+        ctx->setVar(L"eval!",new NativeFunction(eval)); 
+        ctx->createVar(L"set!");
+        ctx->setVar(L"set!",new NativeFunction(set));
+        ctx->createVar(L"parse!");
+        ctx->setVar(L"parse!",new NativeFunction(parse));
+        ctx->createVar(L"Native");
+        ctx->setVar(L"Native",new Hash(new std::unordered_map<std::wstring, Expression*>({
+        {L"ast",new Hash(new std::unordered_map<std::wstring, Expression*>({
+                        {L"append",new NativeFunction(append)}}))
+        },      {L"str",new Hash(new std::unordered_map<std::wstring,Expression*>({
+                        {L"len",new NativeFunction(len)}}))}})));
+        Parser par(L"import object; import extra;");
+        std::vector<Z::Expression*> image; 
+        image.push_back(par.Parse());
+        image.front()->eval(ctx);
+        std::wcout << L">>";
+        while(true){
+                std::wstring buf, tmp;
+                while(true){
+                        std::getline(std::wcin,tmp);
+                        if(tmp == L";;"){
+                                break;
+                        }
+                        buf+=tmp + L'\n';
+                }
+                tmp = L"";
+                par.reset().setCode(buf);
+                auto expr = par.Parse();
+                if(!expr){
+                        std::wcout << "[Error!]:" << par.ErrorMsg() << L'\n';
+                }else{
+                        image.push_back(expr);
+                        std::wcout << L">>>>\t";
+                        Z::print(expr->eval(ctx));
+                        std::wcout << L"\n>>";
+                }
         }
-        str+=L"\n" + at_end + L"\n}";
-        Parser par (str);
-        auto ast = par.Parse();
-        std::wcout << par.isSuccess() << L' ' << par.ErrorMsg() << std::endl;
-        if(par.isSuccess() && ast){
-                Context* ctx = new Context(new Nil());
-                ctx->defBuiltinOp(L"binary@+",add);
-                ctx->defBuiltinOp(L"binary@-",sub);
-                ctx->defBuiltinOp(L"binary@/",div);
-                ctx->defBuiltinOp(L"binary@*",mul);
-                ctx->defBuiltinOp(L"binary@<",less);
-                ctx->defBuiltinOp(L"binary@<=",less_eq);
-                ctx->defBuiltinOp(L"binary@>",great);
-                ctx->defBuiltinOp(L"binary@>=",great_eq);
-                ctx->defBuiltinOp(L"binary@==",equal);
-                ctx->defBuiltinOp(L"binary@!=",nonequal);
-                ctx->defBuiltinOp(L"binary@and",_and);
-                ctx->defBuiltinOp(L"binary@or",_or);
-                ctx->defBuiltinOp(L"unary@not",_not);
-                ctx->defBuiltinOp(L"binary@&&",_and);
-                ctx->defBuiltinOp(L"binary@||",_or);
-                ctx->defBuiltinOp(L"unary@!",_not);
-                ctx->defBuiltinOp(L"binary@[",_index);
-                ctx->defBuiltinOp(L"binary@.",_index);
-                ctx->defBuiltinOp(L"binary@=",_assign);
-                ctx->createVar(L"input");
-                ctx->setVar(L"input",new NativeFunction(input)); 
-                ctx->createVar(L"show!");
-                ctx->setVar(L"show!",new NativeFunction(show)); 
-                ctx->createVar(L"eval!");
-                ctx->setVar(L"eval!",new NativeFunction(eval)); 
-                ctx->createVar(L"set!");
-                ctx->setVar(L"set!",new NativeFunction(set));
-                ctx->createVar(L"parse!");
-                ctx->setVar(L"parse!",new NativeFunction(parse));
-                ctx->createVar(L"Native");
-                ctx->setVar(L"Native",new Hash(new std::unordered_map<std::wstring, Expression*>({
-                        {L"ast",new Hash(new std::unordered_map<std::wstring, Expression*>({
-                                {L"append",new NativeFunction(append)}}))
-                },      {L"str",new Hash(new std::unordered_map<std::wstring,Expression*>({
-                                {L"len",new NativeFunction(len)}}))}})));
-                Z::print(new Hash(ctx->env));
-                std::wcerr << L'\n';
-                ast->emit();
-                std::wcerr <<L'\n';
-                ast->eval(ctx);
-                std::wcout << std::endl;
-             //   ctx->release();
 
-        }
 }

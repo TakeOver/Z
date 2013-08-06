@@ -66,6 +66,16 @@ namespace Z{
                 op_precedence[L"unary$+"] = 150;              
                 op_precedence[L"unary$!"] = 150;
         }
+        Parser& p::reset(){
+                failed = false;
+                errMsg = L"";
+                tkn.reset();
+                return *this;
+        }
+        void p::setCode(const std::wstring& code){
+                tkn.setCode(code);
+                tkn.Next();
+        }
         void p::defop(const std::wstring& str, int64_t prec, SubTokTy sty, Token follows){
                 tkn.DefKw(str, sty,true);
                 op_precedence[str] = prec;
@@ -725,6 +735,9 @@ namespace Z{
                                 cond.push_back(_cond);
                                 res.push_back(_res);
                         }
+                        if(tkn.Last().sty == SubTokTy::Semicolon){
+                                tkn.Next();
+                        }
                 }
                 if(tkn.Last().sty!=SubTokTy::RBlock){
                                 for(auto&x:cond)x->FullRelease();
@@ -770,6 +783,9 @@ namespace Z{
                         }
                         cond.push_back(_cond);
                         res.push_back(_res);
+                        if(tkn.Last().sty == SubTokTy::Semicolon){
+                                tkn.Next();
+                        }
                 }
                 if(tkn.Last().sty!=SubTokTy::RBlock){
                                 for(auto&x:cond)x->FullRelease();

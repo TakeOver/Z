@@ -11,6 +11,8 @@ namespace Z{
                 bool            isSuccess();
                 std::wstring    ErrorMsg();
                 Expression*     Parse();
+                Parser&         reset();
+                void            setCode(const std::wstring&);
                 
         private:
                 mutable Tokenizer tkn;

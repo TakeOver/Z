@@ -9,16 +9,20 @@ namespace Z{
         class Tokenizer
         {
         public:
-                Tokenizer(const std::wstring &);
-                ~Tokenizer();
-                Token& Next() const;
-                Token& Look(uint64_t num = 1) const;
-                Token& Last() const;
-                void   RetTokens(uint64_t num = 1) const;
-                void DefKw(const std::wstring&,SubTokTy ty, bool op = false) const;
-                bool eof() const;
+                        Tokenizer(const std::wstring &);
+                        ~Tokenizer();
+                Token&  Next()                          const;
+                Token&  Look(uint64_t num = 1)          const;
+                Token&  Last()                          const;
+                void    RetTokens(uint64_t num = 1)     const;
+                void    DefKw(const std::wstring&,SubTokTy ty, bool op = false) const;
+                bool    eof()                           const;
+                void    reset()                         const;
+                void    setCode(const std::wstring&)    const;
+                mutable bool failed = false;
+                mutable std::wstring errMsg;
         private:
-                const std::wstring code;
+                mutable std::wstring code;
                 mutable std::vector<Token> cache;
                 mutable uint64_t cache_pos = 0;
 
@@ -44,5 +48,6 @@ namespace Z{
                 void _defkw(const std::wstring&,SubTokTy ty, bool op = false) const;
 
                 mutable Token __tokNone = Token(TokTy::None,L"",0,0);
+                void setError(const std::wstring&) const;
         };
 }

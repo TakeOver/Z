@@ -10,4 +10,4 @@ main:
 	clang++ main.o parser.o tokenizer.o context.o -o a.out
 clean:
 	rm ./*.o -v -f ./*/*.o
-build:	tokenizer parser test ctx main
+build:	tokenizer parser test ctx

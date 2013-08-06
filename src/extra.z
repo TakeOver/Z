@@ -1,6 +1,9 @@
 let eval = (what) -> 
         eval!(parse!(what))
 
+let showln! = (args...) -> 
+        show!(...args,"\n")
+
 let read! = () -> 
         parse!(input())
 

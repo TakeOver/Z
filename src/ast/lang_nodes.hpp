@@ -102,7 +102,7 @@ namespace Z{
                 Function(Context* _ctx,Expression * body, VecHelper<Variable> *args, bool is_ellipsis=false):_ctx(_ctx),body(body),args(args),
                         is_ellipsis(is_ellipsis){}
                 virtual ret_ty emit(inp_ty) override {
-                        std::wcout << L"( ";
+                        std::wcout << L"((";
                         for(int i=0;i<((int)args->get().size())-1;++i){
                                 args->get()[i]->emit();
                                 std::wcout << L",";
@@ -111,8 +111,9 @@ namespace Z{
                                 args->get().back()->emit();
                         }
                         if(is_ellipsis)std::wcout << L"...";
-                        std::wcout << L")->";
+                        std::wcout << L") -> ";
                         body->emit();
+                        std::wcout << L")";
                 }
 
                 virtual Expression* eval(Context*ctx)override{
@@ -591,9 +592,7 @@ namespace Z{
                 Lambda(Expression * body, VecHelper<Variable> *args, bool is_ellipsis=false):body(body),args(args),
                         is_ellipsis(is_ellipsis){}
                 virtual ret_ty emit(inp_ty) override {
-                        std::wcout << L"(";
                         Function(nullptr,body,args,is_ellipsis).emit();
-                        std::wcout << L")";
                 }
 
                 void FullRelease()override{ 
@@ -617,11 +616,13 @@ namespace Z{
                 ~AstNode() override { /*_ctx->release();*/ }
                 AstNode(Expression* expr,Context * _ctx):expr(expr),_ctx(_ctx){}
                 virtual ret_ty emit(inp_ty) override {
+                        std::wcout << L"${";
                         expr->emit();
+                        std::wcout << L"}";
                 }
                 virtual Expression* eval(Context*ctx)override{
                         DBG_TRACE();
-                        return expr->eval(_ctx);
+                        return this;
                 }
                 virtual NodeTy type() override { return NodeTy::AstNode; }
                 virtual void FullRelease() override { 
@@ -660,10 +661,12 @@ namespace Z{
                 FCall(Expression * func, VecHelper<Expression> *args):func(func),args(args){}
                 virtual ret_ty emit(inp_ty) override {
                         func->emit();
-                        std::wcout << L'(' << L' ';
-                        for(auto&x:args->get()){
-                                x->emit();
-                                std::wcout << L' ';
+                        std::wcout << L'(';
+                        for(uint i = 0; i< args->get().size(); ++ i ){
+                                args->get()[i]->emit();
+                                if(i+1!=args->get().size()){
+                                        std::wcout << L',';
+                                }
                         }
                         std::wcout << L')';
                 }
@@ -775,18 +778,19 @@ namespace Z{
                 Match(Expression*what, decltype(cond) cond, decltype(res) res, Expression* default_val):what(what),cond(cond),
                 res(res),default_val(default_val){}
                 virtual ret_ty emit(inp_ty) override {     
-                        std::wcout << L"match("; what->emit(); std::wcout << L"){";
+                        std::wcout << L"match("; what->emit(); std::wcout << L"){\n";
                         for(auto i1 = cond->get().begin(), 
                                  i2 = res->get().begin(), 
                                  e1 = cond->get().end(), 
                                  e2 = res->get().end();
-                                 i1!=e1 && i2!=e2; 
-                                 ++i1,++i2){
-                                (*i1)->emit(); std::wcout << L"=>"; (*i2)->emit();
+                                        i1!=e1 && i2!=e2; 
+                                                ++i1,++i2){
                                 std::wcout << L'\t';
+                                (*i1)->emit(); std::wcout << L"=>"; (*i2)->emit();
+                                std::wcout << L";\n";
                         }
                         std::wcout << L"_ =>"; default_val->emit();
-                        std::wcout << L"}";
+                        std::wcout << L"\n}";
                 }
                 virtual Expression* eval(Context*ctx)override{
                         DBG_TRACE();
@@ -820,15 +824,16 @@ namespace Z{
                 ~Cond() override { }
                 Cond(decltype(cond) cond, decltype(res) res):cond(cond),res(res){}
                 virtual ret_ty emit(inp_ty) override {     
-                        std::wcout << L"cond" << L"{\t";
+                        std::wcout << L"cond" << L"{\n";
                         for(auto i1 = cond->get().begin(), 
                                  i2 = res->get().begin(), 
                                  e1 = cond->get().end(), 
                                  e2 = res->get().end();
-                                 i1!=e1 && i2!=e2; 
-                                 ++i1,++i2){
-                                (*i1)->emit(); std::wcout << L"=>"; (*i2)->emit();
+                                        i1!=e1 && i2!=e2; 
+                                                ++i1,++i2){
                                 std::wcout << L'\t';
+                                (*i1)->emit(); std::wcout << L"=>"; (*i2)->emit();
+                                std::wcout << L";\n";
                         }
                         std::wcout << L"}";
                 }

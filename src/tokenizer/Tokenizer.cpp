@@ -38,6 +38,9 @@ namespace Z{
                         return cache[cache_pos++];
                 }
                 auto tok = _next();
+                if(failed){
+                        return this->__tokNone;
+                }
                 if(contains(keywords,tok.str)){
                         tok.sty = keywords[tok.str];
                 }
@@ -99,6 +102,18 @@ namespace Z{
                 }
                 return code[position];
         }
+        void tk::reset() const {
+                this->errMsg = L"";
+                this->failed = false;
+                this->lineno = 0;
+                this->position = 0;
+                this->cache.clear();
+                this->cache_pos = 0;
+                this->code.clear();
+        }
+        void tk::setCode(const std::wstring& code) const {
+                this->code = code;
+        } 
         Token tk::_next() const {
                 _trim();
                 if(_eof()){
@@ -141,11 +156,32 @@ namespace Z{
                 std::wstring res; 
                 wchar_t end = _curChar(); 
                 wchar_t c;
-                while((c=_nextChar()) && (c!=end))res+=c;
+                while(!eof() && (c=_nextChar()) && (c!=end)){
+                        if(c=='\\'){
+                                switch(_nextChar()){
+                                        case 'n': c = '\n';break;
+                                        case '\\': c ='\\';break;
+                                        case 'r': c = '\r';break;
+                                        case 't': c = '\t';break;
+                                        case 'a': c = '\a';break;
+                                        case 'b': c = '\b';break;
+                                        case '$': c = '$'; break;
+                                        case 'f': c = '\f';break;
+                                        default:           break;
+                                }
+                        }
+                        res+=c;
+                }
+                if(c!=end){
+                        setError(L"End of string expected, found:\""+(res)+L"\"");
+                }
                 _nextChar(); // eat \'
                 return res;
         }
-
+        void tk::setError(const std::wstring& msg) const {
+                errMsg = msg + L" on line:" + std::to_wstring(lineno) + L" position:"+std::to_wstring(position);
+                failed = true; 
+        }
         std::wstring tk::_op() const {
                 std::wstring tmp; tmp = _curChar();
                 auto _pos = position;
