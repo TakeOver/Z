@@ -1,118 +1,203 @@
 #include "Parser.hpp"
 #include <iostream>
+#include "../debug.hpp"
 using namespace Z;
-namespace Z{Expression* Parse(const std::wstring& s){
-        return Parser(s).Parse();
-}}
-Value input(Z::Context* ctx, const std::vector<Value>& args){
+namespace Z{
+Expression* Parse(const std::wstring& s){
+        DBG_TRACE();
+        auto res = Parser(s).Parse();
+        return res;
+}
+extern void print(Expression*what){
+        DBG_TRACE();
+        what->emit();
+}
+}
+Expression* show(Context* ctx, const std::vector<Expression*>& args){
+        DBG_TRACE();
         for(auto&x:args){
-                Z::print(x);
+                x->eval(ctx)->emit();
+        }
+        return ctx->nil;
+}
+Expression* eval(Context* ctx, const std::vector<Expression*>& args){
+        DBG_TRACE();
+        if(args.size()!=1){
+                std::wcerr << L"Args != 1 [eval!:native]\n";
+                return ctx->nil;
+        }
+        auto expr = args.front()->eval(ctx);
+        auto ast = expr->as<AstNode>();
+        if(ast){
+                return ast->eval(ast->_ctx);
+        }
+        return expr;
+}
+Expression* input(Z::Context* ctx, const std::vector<Expression*>& args){
+        DBG_TRACE();
+        for(auto&x:args){
+                Z::print(x->eval(ctx));
         }
         std::wstring* str = new std::wstring();
         std::getline(std::wcin,*str);
-        return Value(str);
+        return new String(str);
 }
-Value len(Z::Context* ctx, const std::vector<Value>& args){
-        auto obj = args.front();
-        switch(obj.type){
-                case ValType::String: return Value(static_cast<double>(obj.str->length()));
-                case ValType::Array: return Value(static_cast<double>(obj.arr->size()));
-                default: return Value(0.0);
+Expression* len(Z::Context* ctx, const std::vector<Expression*>& args){
+        DBG_TRACE();
+        auto obj = args.front()->eval(ctx);
+        switch(obj->type()){
+                case NodeTy::String: return new Number(static_cast<double>(dynamic_cast<String*>(obj)->value->length()));
+                case NodeTy::Array: return new Number(static_cast<double>(dynamic_cast<Array*>(obj)->value->size()));
+                default: return new Number(0.0);
         }
 }
-Expression* to_ast(Value val){
-        switch(val.type){
-                case ValType::Expression: return val.expr;
-                case ValType::Number: return new Number(val.num);
-                case ValType::Function: return new Lambda(val.fun->body,val.fun->args);
-                case ValType::String: return new String(val.str);
-                case ValType::Null: return new Nil();
-                case ValType::Boolean: return new Boolean((bool)val.boolv);
-                default: {
-                        std::wcerr << L"Not implemented convertion to ast\n";
-                        exit(0);
-                }
+Expression* append(Z::Context* ctx, const std::vector<Expression*>& args){
+        DBG_TRACE();
+        auto self = dynamic_cast<AstNode*>(args.front()->eval(ctx));
+        if(!self){
+            return ctx->nil;
         }
-}
-Value append(Z::Context* ctx, const std::vector<Value>& args){
-        auto self = args.front();
-        if(self.expr->type()==NodeTy::Hash){
+        if(self->expr->type()==NodeTy::HashAst){
                 if(args.size()<3){
-                        return ctx->null;
+                        return ctx->nil;
                 }
-                auto key = to_ast(args[1]);
-                auto value = to_ast(args[2]);
-                auto hash = dynamic_cast<Hash*>(self.expr);
+                auto key = args[1]->eval(ctx);
+                auto value = args[2]->eval(ctx);
+                auto hash = dynamic_cast<HashAst*>(self->expr);
                 hash->keys->get().push_back(key);
                 hash->arr->get().push_back(value);
-        } else if(self.expr->type() == NodeTy::Block){
+        } else if(self->expr->type() == NodeTy::Block){
                 if(args.size()<2){
-                        return ctx->null;
+                        return ctx->nil;
                 }
-                auto value = to_ast(args[1]);
-                dynamic_cast<Block*>(self.expr)->block->get().push_back(value);
+                auto value = (args[1]->eval(ctx));
+                dynamic_cast<Block*>(self->expr)->block->get().push_back(value);
         }
         return self;
 }
-Value set(Z::Context*ctx, const std::vector<Value>&args){
+Expression* set(Z::Context*ctx, const std::vector<Expression*>&args){
+        DBG_TRACE();
         if(args.size()!=2){
-                return ctx->null;
+                return ctx->nil;
         }
-        auto var = args.front();
-        auto what = args.back();
-        if(var.type!=ValType::Expression){
-                return ctx->null;
+        auto var = args.front()->eval(ctx);
+        auto what = args.back()->eval(ctx);
+        if(var->type()!=NodeTy::AstNode){
+                return ctx->nil;
         }
-        if(var.expr->type()!=NodeTy::Variable){
-                return ctx->null;
+        if(dynamic_cast<AstNode*>(var)->expr->type()!=NodeTy::Variable){
+                return ctx->nil;
         }
-        var.ctx->setVar(dynamic_cast<Variable*>(var.expr)->getname(),what);
+        dynamic_cast<AstNode*>(var)->_ctx->setVar(dynamic_cast<Variable*>(dynamic_cast<AstNode*>(var)->expr)->getname(),what);
         return what;
 }
-Value parse(Z::Context*ctx, const std::vector<Value>&args){
+Expression* parse(Z::Context*ctx, const std::vector<Expression*>&args){
+        DBG_TRACE();
         auto what = args.back();
-        if(what.type!=ValType::String){
-                return ctx->null;
+        if(what->type()!=NodeTy::String){
+                return ctx->nil;
         }
-        Parser par (*what.str);
+        Parser par (*dynamic_cast<String*>(what)->value);
         auto ast = par.Parse();
         if(!ast){
-                return ctx->null;
+                return ctx->nil;
         }
-        return Value(ast,ctx);
+        return new AstNode(ast,ctx);
 }
-namespace Z{Value fcall(Value fun,const std::vector<Value> & _args,Context *ctx){
-        if(fun.type==ValType::NativeFunction){
-                return fun.native(ctx,_args);
+bool to_bool(Expression* expr){
+        if(expr->type()==NodeTy::Nil){
+                return false;
         }
-        if(fun.type!=ValType::Function){
-                return ctx->null;
+        if(expr->type()==NodeTy::Boolean){
+                return expr->as<Boolean>()->value;
         }
-        Context* _ctx = new Context(fun.fun->ctx);
-        auto& vars = fun.fun->args->get();
-        bool ell = fun.fun->is_ellipsis;
-        for(uint j = 0; j<_args.size();++j){
-                if(j+1==vars.size() && ell){
-                        std::vector<Value>* rest = new std::vector<Value>();
-                        for(uint k = j; k<_args.size();++k){
-                                rest->push_back(_args[k]);
+        return true;
+}
+#define defop(name,op,T)\
+        Expression* name(Z::Context* ctx, const std::vector<Expression*>&args){\
+                if(args.size()!=2){\
+                        return ctx->nil;\
+                }\
+                auto lhs = args.front()->eval(ctx)->as<T>(),\
+                        rhs = args.back()->eval(ctx)->as<T>();\
+                if(!lhs || !rhs){\
+                        return ctx->nil;\
+                }\
+                return new T(lhs->value op rhs->value);\
+        }
+defop(add,+,Number);
+defop(sub,-,Number);
+defop(div,/,Number);
+defop(mul,*,Number);
+#undef defop
+#define defop(name,op)\
+        Expression* name(Z::Context* ctx, const std::vector<Expression*>&args){\
+                if(args.size()!=2){\
+                        return ctx->nil;\
+                }\
+                auto lhs = args.front()->eval(ctx),\
+                        rhs = args.back()->eval(ctx);\
+                return new Boolean(::to_bool(lhs) op ::to_bool(rhs));\
+        }
+defop(less,<);
+defop(less_eq,<=);
+defop(great,>);
+defop(great_eq,>=);
+defop(equal,==);
+defop(nonequal,!=);
+#undef defop
+Expression* _and(Z::Context* ctx, const std::vector<Expression*>&args){
+        if(args.size()!=2){
+                return ctx->nil;
+        }
+        auto lhs = args.front()->eval(ctx),
+                rhs = args.back()->eval(ctx);
+        if(!::to_bool(lhs)){
+                return lhs;
+        }
+        return rhs;
+}
+Expression* _or(Z::Context* ctx, const std::vector<Expression*>&args){
+        if(args.size()!=2){
+                return ctx->nil;
+        }
+        auto lhs = args.front()->eval(ctx),
+                rhs = args.back()->eval(ctx);
+        if(!::to_bool(lhs)){
+                return rhs;
+        }
+        return lhs;
+}
+Expression* _not(Z::Context* ctx, const std::vector<Expression*>&args){
+        if(args.size()!=1){
+                return ctx->nil;
+        }
+        auto lhs = args.front()->eval(ctx);
+        return new Boolean(!::to_bool(lhs));
+}
+Expression* _index(Z::Context* ctx, const std::vector<Expression*>&args){
+        if(args.size()!=2){
+                return ctx->nil;
+        }
+        auto obj = args.front()->eval(ctx),
+                key = args.back()->eval(ctx);
+        if(key->type()==Z::NodeTy::String){
+                if(obj->type()!=Z::NodeTy::Hash){
+                        obj = ctx->getVar(typeof_str(obj->type()));
+                        if(obj->type()!=Z::NodeTy::Hash){
+                                return ctx->nil;
                         }
-                        _ctx->createVar(vars.back()->getname());
-                        _ctx->setVar(vars.back()->getname(), Value(rest));
-                        break;
                 }
-                if(j>=vars.size()){
-                        break;
-                }
-                _ctx->createVar(vars[j]->getname());
-                _ctx->setVar(vars[j]->getname(),_args[j]);
+                return obj->as<Hash>()->get(ctx,*key->as<String>()->value);
         }
-        auto res = fun.fun->body->eval(_ctx);
-        _ctx->Release();
-        return res;
-}}
+        if(key->type()!=Z::NodeTy::Number || obj->type()!=Z::NodeTy::Array){
+                return ctx->nil;
+        }
+        return obj->as<Array>()->get(ctx,std::floor(key->as<Number>()->value));
+
+}
 int main(){
-        std::wstring str =L"{\n import core; \n",tmp, at_end = L"nil";
+        std::wstring str =L"{\n //import core; \n",tmp, at_end = L"nil";
         while(!std::cin.eof()){
                 std::getline(std::wcin,tmp);
                 if(tmp == L"run!")break;
@@ -123,25 +208,48 @@ int main(){
         auto ast = par.Parse();
         std::wcout << par.isSuccess() << L' ' << par.ErrorMsg() << std::endl;
         if(par.isSuccess() && ast){
-                Context* ctx = new Context();
+                Context* ctx = new Context(new Nil());
+                ctx->defBuiltinOp(L"binary@+",add);
+                ctx->defBuiltinOp(L"binary@-",sub);
+                ctx->defBuiltinOp(L"binary@/",div);
+                ctx->defBuiltinOp(L"binary@*",mul);
+                ctx->defBuiltinOp(L"binary@<",less);
+                ctx->defBuiltinOp(L"binary@<=",less_eq);
+                ctx->defBuiltinOp(L"binary@>",great);
+                ctx->defBuiltinOp(L"binary@>=",great_eq);
+                ctx->defBuiltinOp(L"binary@==",equal);
+                ctx->defBuiltinOp(L"binary@!=",nonequal);
+                ctx->defBuiltinOp(L"binary@and",_and);
+                ctx->defBuiltinOp(L"binary@or",_or);
+                ctx->defBuiltinOp(L"unary@not",_not);
+                ctx->defBuiltinOp(L"binary@&&",_and);
+                ctx->defBuiltinOp(L"binary@||",_or);
+                ctx->defBuiltinOp(L"unary@!",_not);
+                ctx->defBuiltinOp(L"binary@[",_index);
+                ctx->defBuiltinOp(L"binary@.",_index);
                 ctx->createVar(L"input");
-                ctx->setVar(L"input",Value(input)); 
+                ctx->setVar(L"input",new NativeFunction(input)); 
+                ctx->createVar(L"show!");
+                ctx->setVar(L"show!",new NativeFunction(show)); 
+                ctx->createVar(L"eval!");
+                ctx->setVar(L"eval!",new NativeFunction(eval)); 
                 ctx->createVar(L"set!");
-                ctx->setVar(L"set!",Value(set));
+                ctx->setVar(L"set!",new NativeFunction(set));
                 ctx->createVar(L"parse!");
-                ctx->setVar(L"parse!",Value(parse));
+                ctx->setVar(L"parse!",new NativeFunction(parse));
                 ctx->createVar(L"Native");
-                ctx->setVar(L"Native",Value(new std::unordered_map<std::wstring, Value>({
-                        {L"ast",Value(new std::unordered_map<std::wstring, Value>({
-                                {L"append",Value(append)}}))
-                },      {L"str",Value(new std::unordered_map<std::wstring,Value>({{L"len",Value(len)}}))}})));
-                Z::print(&ctx->getEnv());
+                ctx->setVar(L"Native",new Hash(new std::unordered_map<std::wstring, Expression*>({
+                        {L"ast",new Hash(new std::unordered_map<std::wstring, Expression*>({
+                                {L"append",new NativeFunction(append)}}))
+                },      {L"str",new Hash(new std::unordered_map<std::wstring,Expression*>({
+                                {L"len",new NativeFunction(len)}}))}})));
+                Z::print(new Hash(ctx->env));
                 std::wcerr << L'\n';
                 ast->emit();
                 std::wcerr <<L'\n';
                 ast->eval(ctx);
                 std::wcout << std::endl;
-                ctx->Release();
-             //   ast->FullRelease();
+             //   ctx->release();
+
         }
 }

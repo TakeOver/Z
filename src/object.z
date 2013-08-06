@@ -1,10 +1,11 @@
+run
 let object = ${#{
         is_nil = false
 }}
-let system_getter = (self,what)->
+let system_getter = (self,what) ->
         self.base[what]
 
-let allocator = (self,args...)-> {
+let allocator = (self,args...) -> {
         let obj = self.create()
         obj.super = (obj,args...)->
                 obj.base = self.inherits.new(...args)
@@ -16,9 +17,9 @@ let allocator = (self,args...)-> {
         obj
 }
 let Object = #{
-        base = eval! object,
+        base = eval!(object),
         new = allocator,
-        create = self -> eval! object
+        create = self -> eval!(object)
 }
 let Class = #{
         base = Object.new(),
@@ -28,7 +29,7 @@ let Class = #{
                 }
                 self.class_ast = ast
                 self.create = (self)-> 
-                        eval! self.class_ast
+                        eval!(self.class_ast)
                 self.new = allocator
                 self.inherits = inherits
                 self
@@ -83,17 +84,6 @@ let Nil = #{
         base = Object.new(),
         is_nil = true
 }
-let __jstypeof = self-> {
-        match __typeof(self) {
-                String     => "String"
-                Object     => "Object"
-                Number     => "Number"
-                Nil        => "Nil"
-                Expression => "Expression"
-                Array      => "Array"
-                _          => "$Error"
-        }
-}
 Class["$system_getter"] = system_getter
 Object["$system_getter"]=system_getter
 Number["$system_getter"]=system_getter
@@ -108,3 +98,4 @@ export Class
 export Object
 export Array
 export Nil
+run!

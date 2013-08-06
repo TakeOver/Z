@@ -3,121 +3,205 @@
 #include "basic_node.hpp"
 #include "../tokenizer/Token.hpp"
 #include <fstream>
+#include <cmath>
 #include <cstring>
+#include "../debug.hpp"
 namespace Z{
+                        
+        namespace { 
+                bool to_bool(Expression*);
+                std::wstring typeof_str(NodeTy); 
+        }
+
+        class Number: public virtual Expression{
+        public:
+                double value;
+                ~Number() override { }
+                Number(double value):value(value){}
+                virtual ret_ty emit(inp_ty) override {
+                        std::wcout << value;
+                }
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
+                        return this;
+                }
+                virtual NodeTy type() override { return NodeTy::Number; }
+        };
+
         class Variable: public virtual Expression{
         public:
                 Token name;
                 ~Variable() override { }
                 Variable(const Token& name):name(name){}
                 virtual ret_ty emit(inp_ty) override {
-                        std::wcerr << name.str;
+                        std::wcout << name.str;
                 }
-                virtual Value eval(Context*ctx)override{
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
                         return ctx->getVar(name.str);
                 }
                 virtual NodeTy type() override { return NodeTy::Variable; }
                 std::wstring getname(){ return name.str; }
         };
+
+        class Array: public virtual Expression{
+        public:
+                std::vector<Expression*>* value;
+                ~Array() override { }
+                Array(decltype(value) value):value(value){}
+                virtual ret_ty emit(inp_ty) override {
+                        std::wcout << L"[";
+                        for(int i= 0; i<((int)value->size())-1;++i){
+                                (*value)[i]->emit();
+                                std::wcout << L",";
+                        }
+                        if(value->size()){
+                                value->back()->emit();
+                        }
+                        std::wcout << L"]";
+                }
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
+                        return this;       
+                }
+                virtual void FullRelease() override { 
+                        delete value; 
+                        delete this; 
+                }
+                Expression* get(Context* ctx, int64_t key){
+                        if(std::abs(key)>=value->size()){
+                                return ctx->nil;
+                        }
+                        if(key<0){
+                                key = value->size() - key;
+                        }
+                        return (*value)[key];
+                }
+                Expression* set(Context* ctx, int64_t key, Expression* _value){
+                        if(key<0){
+                                key = value->size() - key;
+                        }
+                        if(key<0){
+                                return ctx->nil;
+                        }
+                        if((key)>=value->size()){
+                                value->resize(std::abs(key));
+                        }
+                        return (*value)[key] = _value;
+                }
+                virtual NodeTy type() override { return NodeTy::Array; }
+        };
+
+        class Function: public virtual Expression{
+        public:
+                Context* _ctx;
+                Expression* body;
+                VecHelper<Variable>* args;
+                bool is_ellipsis;
+                ~Function() override { }
+                Function(Context* _ctx,Expression * body, VecHelper<Variable> *args, bool is_ellipsis=false):_ctx(_ctx),body(body),args(args),
+                        is_ellipsis(is_ellipsis){}
+                virtual ret_ty emit(inp_ty) override {
+                        std::wcout << L"( ";
+                        for(int i=0;i<((int)args->get().size())-1;++i){
+                                args->get()[i]->emit();
+                                std::wcout << L",";
+                        }
+                        if(args->get().size()){
+                                args->get().back()->emit();
+                        }
+                        if(is_ellipsis)std::wcout << L"...";
+                        std::wcout << L")->";
+                        body->emit();
+                }
+
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
+                        return this;       
+                }
+                Expression* call(Context* ctx,std::vector<Expression*> valargs, bool eval_args = true){
+                        if(eval_args){
+                                for(auto&x:(valargs)){
+                                        x = x->eval(ctx);
+                                }
+                        }
+                        auto __ctx = new Context(_ctx);
+                        auto &varargs = args->get();
+                        uint it = 0, lim = varargs.size() - is_ellipsis;
+                        for(;it<lim;++it){
+                                __ctx->createVar(varargs[it]->getname());
+                                if(it<valargs.size()){
+                                        __ctx->setVar(varargs[it]->getname(),valargs[it]);
+                                }else{
+                                        __ctx->setVar(varargs[it]->getname(),ctx->nil);
+                                }
+                        }
+                        if(is_ellipsis){
+                                std::vector<Expression*> *rest = new std::vector<Expression*>();
+                                for(;it<valargs.size();++it){
+                                        rest->push_back(valargs[it]);
+                                }
+                                __ctx->createVar(varargs.back()->getname());
+                                __ctx->setVar(varargs.back()->getname(),new Array(rest));
+                        }
+                        return body->eval(__ctx);
+
+                }
+                virtual NodeTy type() override { return NodeTy::Function; }
+        };
+
+        class NativeFunction: public virtual Expression{
+        public:
+                native_fun_t func_ptr;
+                ~NativeFunction() override { }
+                NativeFunction(native_fun_t func_ptr):func_ptr(func_ptr){ }
+                virtual ret_ty emit(inp_ty) override {
+                        std::wcout << L"NativeFunction!";
+                }
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
+                        return this;
+                }
+                virtual NodeTy type() override { return NodeTy::NativeFunction; }
+                Expression* call(Context* ctx, const std::vector<Expression*>& args){
+                        return func_ptr(ctx,args);
+                }
+        };
+
         class BinOp: public virtual Expression{
         public:
-                Token op;
+                std::wstring op;
                 Expression * lhs, * rhs;
                 ~BinOp() override { }
-                BinOp(const Token& op, Expression * lhs, Expression * rhs):op(op),lhs(lhs),rhs(rhs){}
+                BinOp(const Token& op, Expression * lhs, Expression * rhs):op(L"binary@" + op.str),lhs(lhs),rhs(rhs){}
                 virtual ret_ty emit(inp_ty) override {
-                        std::wcerr << L"(";
+                        std::wcout << L"(";
                         lhs->emit();
-                        std::wcerr <<op.str;
+                        for(int i = 7;i<op.length();++i){
+                                std::wcout << (wchar_t)op[i];
+                        }
                         rhs->emit();
-                        std::wcerr << L")";
+                        if(op == L"binary@["){
+                                std::wcout << L"]";
+                        }
+                        std::wcout << L")";
                 }
-                virtual Value eval(Context*ctx)override{
-                        if(op.str == L"+")
-                                return add(lhs->eval(ctx), rhs->eval(ctx),ctx);
-                        if(op.str == L"-")
-                                return sub(lhs->eval(ctx), rhs->eval(ctx),ctx);
-                        if(op.str == L"/")
-                                return div(lhs->eval(ctx), rhs->eval(ctx),ctx);
-                        if(op.str == L"*")
-                                return mul(lhs->eval(ctx), rhs->eval(ctx),ctx);
-                        if(op.str == L"%")
-                                return mod(lhs->eval(ctx), rhs->eval(ctx),ctx);
-                        if(op.str == L">")
-                                return great(lhs->eval(ctx), rhs->eval(ctx),ctx);
-                        if(op.str == L"<")
-                                return less(lhs->eval(ctx), rhs->eval(ctx),ctx);
-                        if(op.str == L">=")
-                                return great_eq(lhs->eval(ctx), rhs->eval(ctx),ctx);
-                        if(op.str == L"<=")
-                                return less_eq(lhs->eval(ctx), rhs->eval(ctx),ctx);
-                        if(op.str == L"==")
-                                return eq(lhs->eval(ctx), rhs->eval(ctx),ctx);
-                        if(op.str == L"!=")
-                                return notb(eq(lhs->eval(ctx),rhs->eval(ctx),ctx),ctx);
-                        if(op.str == L"." || op.str == L"["){
-                                auto obj = lhs->eval(ctx);
-                                auto key = rhs->eval(ctx);
-                                if(obj.type!=ValType::Hash && key.type == ValType::String){
-                                        auto obj_name = match_ty_tostr(obj.type);
-                                        obj = ctx->getVar(obj_name);
-                                        if(obj.type!=ValType::Hash){
-                                                return ctx->null;
-                                        }
-                                }
-                                if(key.type == ValType::String){
-                                        return getKey(obj, *key.str, ctx);
-                                }
-                                if(key.type == ValType::Number){
-                                        return getIdx(obj,static_cast<int64_t>(key.num),ctx);
-                                }
-                                return ctx->null;
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
+                        auto builtin = ctx->findBuiltinOp(op);
+                        DBG_TRACE("builtin:%li",(intptr_t)builtin);
+                        if(builtin){
+                                return builtin(ctx,{lhs,rhs});
                         }
-                        if(op.str == L"and"){
-                                auto lval = lhs->eval(ctx);
-                                if(to_bool(lval)){
-                                        return rhs->eval(ctx);
-                                }
-                                return lval;
+                        auto fun = ctx->getVar(op);
+                        if(fun->type()==NodeTy::NativeFunction){
+                                return dynamic_cast<NativeFunction*>(fun)->call(ctx,{lhs,rhs});
                         }
-                        if(op.str == L"or"){
-                                auto lval = lhs->eval(ctx);
-                                if(to_bool(lval)){
-                                        return lval;
-                                }
-                                return rhs->eval(ctx);
+                        if(fun->type() == NodeTy::Function){
+                                return fun->as<Function>()->call(ctx,{lhs->eval(ctx),rhs->eval(ctx)},false);
                         }
-                        if(op.str == L"="){
-                                if(lhs->type() == NodeTy::BinOp){
-                                        auto bo = dynamic_cast<BinOp*>(lhs);
-                                        if(bo->op.str == L"[" || bo->op.str == L"."){
-                                                auto _what = bo->lhs->eval(ctx);
-                                                auto _key = bo->rhs->eval(ctx);
-                                                if(_what.type!=ValType::Hash && _key.type == ValType::String){
-                                                        _what = ctx->getVar(match_ty_tostr(_what.type));
-                                                }
-                                                Value val;
-                                                if(_key.type == ValType::String){
-                                                        setKey(_what, *_key.str,val=rhs->eval(ctx), ctx);
-                                                }
-                                                if(_key.type == ValType::Number){
-                                                        setIdx(_what,static_cast<int64_t>(_key.num),val = rhs->eval(ctx),ctx);
-                                                }
-                                                return val;
-                                        }
-                                }
-                                if(lhs->type()!=NodeTy::Variable){
-                                        std::wcerr << L"Variable expected as LHS\n";
-                                        lhs->emit(); 
-                                        std::wcerr << op.str;
-                                        rhs->emit();
-                                        return ctx->null;
-                                }
-                                Value val;
-                                ctx->setVar(dynamic_cast<Variable*>(lhs)->name.str,val = rhs->eval(ctx));
-                                return val;
-                        }
-                        return ctx->null;
+                        return ctx->nil;
+
                 }
                 void FullRelease()override{ 
                         lhs->FullRelease(); 
@@ -126,27 +210,35 @@ namespace Z{
                 }
                 virtual NodeTy type() override { return NodeTy::BinOp; }
         };
+
         class UnOp: public virtual Expression{
-                Token op;
+                std::wstring op;
                 Expression * lhs;
         public:
                 ~UnOp() override { }
-                UnOp(const Token& op, Expression * lhs):op(op),lhs(lhs){}
-                virtual ret_ty emit(inp_ty) override {
-                        std::wcerr << op.str << L"(";
-                        lhs->emit();
-                        std::wcerr << L")";
-                }
-                virtual Value eval(Context*ctx)override{
-                        if(op.str == L"+")
-                                return lhs->eval(ctx);
-                        auto val = lhs->eval(ctx);
-                        if(op.str == L"-" && val.type == ValType::Number)
-                                return Value(-val.num);
-                        if(op.str == L"!"){
-                                return notb(val,ctx);
+                UnOp(const std::wstring& op, Expression * lhs):op(L"unary@"+op),lhs(lhs){}
+                virtual ret_ty emit(inp_ty) override {                        
+                        std::wcout << L"(";
+                        for(int i =6;i<op.length();++i){
+                                std::wcout << (wchar_t)op[i];
                         }
-                        return Value();
+                        lhs->emit();
+                        std::wcout << L")";
+                }
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
+                        auto builtin = ctx->findBuiltinOp(op);
+                        if(builtin){
+                                return builtin(ctx,{lhs});
+                        }
+                        auto fun = ctx->getVar(op);
+                        if(fun->type()==NodeTy::NativeFunction){
+                                return fun->as<NativeFunction>()->call(ctx,{lhs});
+                        }
+                        if(fun->type()==NodeTy::Function){
+                                return fun->as<Function>()->call(ctx,{lhs});
+                        }
+                        return ctx->nil;
                 }
                 void FullRelease()override{ 
                         lhs->FullRelease(); 
@@ -154,16 +246,18 @@ namespace Z{
                 }
                 virtual NodeTy type() override { return NodeTy::UnOp; }
         };
+
         class String: public virtual Expression{
-                std::wstring* value;
         public:
+                std::wstring* value;
                 ~String() override { }
                 String(std::wstring* value):value(value){}
                 virtual ret_ty emit(inp_ty) override {
-                        std::wcerr << L"\"" << *value << L"\"";
+                        std::wcout << L"\"" << *value << L"\"";
                 }
-                virtual Value eval(Context*ctx)override{
-                        return Value(value);       
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
+                        return this;       
                 }
                 virtual void FullRelease() override { 
                         delete value; 
@@ -171,54 +265,100 @@ namespace Z{
                 }
                 virtual NodeTy type() override { return NodeTy::String; }
         };
-        class Boolean: public virtual Expression{
-                bool value;
+
+        class Hash: public virtual Expression{
         public:
+                std::unordered_map<std::wstring, Expression*>* value;
+                ~Hash() override { }
+                Hash(decltype(value) value):value(value){}
+                virtual ret_ty emit(inp_ty) override {
+                        std::wcout << L"#{";
+                        uint i = 0;
+                        for(auto&x:*value){
+                                ++i;
+                                std::wcout <<L"\"" <<  x.first << L"\"=";
+                                x.second->emit();
+                                if(i != value->size()){
+                                        std::wcout << L",";
+                                }
+                        }
+                        std::wcout << L"}";
+                }
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
+                        return this;       
+                }
+                virtual void FullRelease() override { 
+                        delete value; 
+                        delete this; 
+                }
+                Expression* get(Context* ctx, const std::wstring & key){
+                        auto iter = value->find(key);
+                        if(iter!=value->end()){
+                                return iter->second;
+                        }
+                        return ctx->nil;
+                }
+                Expression* set(Context* ctx, const std::wstring & key, Expression* value){
+                        (*this->value)[key] = value;
+                        return value;
+                }
+                virtual NodeTy type() override { return NodeTy::Hash; }
+        };
+
+        class Boolean: public virtual Expression{
+        public:
+                bool value;
                 ~Boolean() override { }
                 Boolean(bool value):value(value){}
                 virtual ret_ty emit(inp_ty) override {
-                        std::wcerr << (value?L" true ":L" false ");
+                        std::wcout << (value?L"true":L"false");
                 }
-                virtual Value eval(Context*ctx)override{
-                        return Value(value);       
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
+                        return this;       
                 }
                 virtual NodeTy type() override { return NodeTy::Boolean; }
         };
+
         class Nil: public virtual Expression{
         public:
                 ~Nil() override { }
                 Nil(){}
                 virtual ret_ty emit(inp_ty) override {
-                        std::wcerr << (L"nil");
+                        std::wcout << (L"nil");
                 }
-                virtual Value eval(Context*ctx)override{
-                        return Value();       
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
+                        return this;       
                 }
                 virtual NodeTy type() override { return NodeTy::Nil; }
         };
+
         class Delete: public virtual Expression{
                 Expression* what;
         public:
                 ~Delete() override { }
                 Delete(Expression*what):what(what){}
                 virtual ret_ty emit(inp_ty) override {
-                        std::wcerr << (L"delete"); 
+                        std::wcout << (L"delete"); 
                         what->emit();
                 }
-                virtual Value eval(Context*ctx)override{
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
                         switch(what->type()){
                                 case NodeTy::BinOp: {
                                         auto bop = dynamic_cast<BinOp*>(what);
-                                        if(bop->op.str == L"." || bop->op.str == L"["){
+                                        if(bop->op == L"operator@." || bop->op == L"operator@["){
                                                 auto obj = bop->lhs->eval(ctx), 
                                                         key = bop->rhs->eval(ctx);
-                                                if(obj.type!=ValType::Hash){
+                                                if(obj->type()!=NodeTy::Hash){
                                                         goto otherwise;
                                                 }
-                                                if(key.type!=ValType::String){
+                                                if(key->type()!=NodeTy::String){
                                                         return obj;
                                                 }
-                                                obj.hash->erase(*key.str);
+                                                dynamic_cast<Hash*>(obj)->value->erase(*dynamic_cast<String*>(key)->value);
                                                 return obj;
                                         }
                                         goto otherwise;
@@ -226,12 +366,12 @@ namespace Z{
                                 case NodeTy::Variable: {
                                         auto var = dynamic_cast<Variable*>(what);
                                         ctx->deleteVar(var->getname());
-                                        return ctx->null;
+                                        return ctx->nil;
                                 }
                                 default: goto otherwise;
                         }
                         otherwise:
-                        return ctx->null;
+                        return ctx->nil;
                 }
                 void FullRelease()override{ 
                         what->FullRelease(); 
@@ -239,18 +379,20 @@ namespace Z{
                 }
                 virtual NodeTy type() override { return NodeTy::Delete; }
         };
+
         class Ellipsis: public virtual Expression{
                 Expression* what;
         public:
                 ~Ellipsis() override { }
                 Ellipsis(Expression * what):what(what){}
                 virtual ret_ty emit(inp_ty) override {
-                        std::wcerr << (L"..."); what->emit();
+                        std::wcout << (L"..."); what->emit();
                 }
-                virtual Value eval(Context*ctx)override{
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
                         auto ell = what->eval(ctx);
-                        if(ell.type!=ValType::Array){
-                                return Value(new std::vector<Value>());
+                        if(ell->type()!=NodeTy::Array){
+                                return new Array(new std::vector<Expression*>());
                         }
                         return ell;
                 }
@@ -260,6 +402,7 @@ namespace Z{
                 }
                 virtual NodeTy type() override { return NodeTy::Ellipsis; }
         };
+
         class For: public virtual Expression{
                 Variable * var;
                 Expression *from, *to,*body;
@@ -268,35 +411,39 @@ namespace Z{
                 ~For() override { }
                 For(decltype(var)var,decltype(from)from,decltype(to)to,decltype(body) body):var(var),from(from),to(to),body(body){}
                 virtual ret_ty emit(inp_ty) override {
-                        std::wcerr << (L"for ") << var->getname() << L' ';
-                        from->emit(); std::wcerr << L" to "; to->emit(); std::wcerr << L' ';
+                        std::wcout << (L"for ") << var->getname() << L'=';
+                        from->emit(); std::wcout << L" to "; to->emit(); std::wcout << L' ';
                         body->emit();
                 }
-                virtual Value eval(Context*ctx)override{
-                        auto _ctx = new Context(ctx);
-                        auto _from =  from->eval(ctx);
-                        if(_from.type!=ValType::Number){
-                                ctx->RaiseException(L"Number expected as for-range(from)");
-                                return ctx->null;
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
+                        Context* _ctx = new Context(ctx);
+                        Number* _from =  dynamic_cast<Number*>(from->eval(ctx));
+                        if(!_from){
+                                return ctx->nil;
                         }
                         _ctx->createVar(var->getname());
                         _ctx->setVar(var->getname(),_from);
-                        auto _to = to->eval(ctx);
-                        if(_to.type!=ValType::Number){
-                                ctx->RaiseException(L"Number expected as for-range(to)");
-                                return ctx->null;
+                        Number* _to = dynamic_cast<Number*>(to->eval(ctx));
+                        if(!_to){
+                                return ctx->nil;
                         }
                         auto step = 1.0;
-                        if(_from.num > _to.num)step=-step;
-                        Value res;
-                        while(to_bool(less_eq(_ctx->getVar(var->getname()),_to,ctx))){
-                                res=body->eval(_ctx);
-                                auto _var = _ctx->getVar(var->getname());
-                                if(_var.type!=ValType::Number){
-                                        ctx->RaiseException(L"Variable type must be number in for-range");
-                                        return ctx->null;
+                        if(_from->value > _to->value){
+                                step=-step;
+                        }
+                        Expression* res;
+                        auto less_eq = ctx->findBuiltinOp(L"operator@<=");
+                        if(!less_eq){
+                                return ctx->nil;
+                        }
+                        while(to_bool(less_eq(ctx,{_ctx->getVar(var->getname()),_to}))){
+                                res = body->eval(_ctx);
+                                auto _var = dynamic_cast<Number*>(_ctx->getVar(var->getname()));
+                                if(!_var){
+                                        return ctx->nil;
                                 }
-                                _ctx->setVar(var->getname(),Value(_var.num + step));
+                                _ctx->setVar(var->getname(),new Number(_var->value + step));
                         }
                         return res;
 
@@ -311,6 +458,7 @@ namespace Z{
                 }
                 virtual NodeTy type() override { return NodeTy::For; }
         };
+
         class While: public virtual Expression{
                 Expression *cond, 
                            *body;
@@ -318,16 +466,17 @@ namespace Z{
                 ~While() override { }
                 While(decltype(cond) cond,decltype(body) body):cond(cond),body(body){}
                 virtual ret_ty emit(inp_ty) override {
-                        std::wcerr << (L"while("); cond->emit(); std::wcerr << L")";
+                        std::wcout << (L"while("); cond->emit(); std::wcout << L")";
                         body->emit();
                 }
-                virtual Value eval(Context*ctx)override{
-                        Value res;
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
+                        Expression* res;
                         auto _ctx = new Context(ctx);
                         while(to_bool(cond->eval(ctx))){
                                 res = body->eval(_ctx);
                         }
-                        _ctx->Release();
+                        /*_ctx->release();*/
                         return res;
                 }
                 void FullRelease()override{ 
@@ -337,100 +486,93 @@ namespace Z{
                 }
                 virtual NodeTy type() override { return NodeTy::While; }
         };
-        class Array: public virtual Expression{
+
+        class ArrayAst: public virtual Expression{
                 VecHelper<Expression>* arr;
         public:
-                ~Array() override { }
-                Array(decltype(arr) arr):arr(arr){}
+                ~ArrayAst() override { }
+                ArrayAst(decltype(arr) arr):arr(arr){}
                 virtual ret_ty emit(inp_ty) override {
-                        std::wcerr << (L"Array!( ");
+                        std::wcout << (L"[");
+                        uint i = 0;
                         for(auto&x:arr->get()){
+                                ++i;
                                 x->emit();
-                                std::wcerr << L' ';
+                                if(i != arr->get().size()){
+                                        std::wcout << L',';
+                                }
                         }
-                        std::wcerr << L')';
+                        std::wcout << L']';
                 }
-                virtual Value eval(Context*ctx)override{
-                        std::vector<Value>* array = new std::vector<Value>();
-                        array->resize(arr->get().size());
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
+                        std::vector<Expression*>* res = new std::vector<Expression*>();
+                        res->resize(arr->get().size());
                         uint it = 0;
                         for(auto&x:arr->get()){
-                                (*array)[it] = x->eval(ctx);
+                                (*res)[it] = x->eval(ctx);
                                 ++it;
                         }
-                        return Value(array);
+                        return new Array(res);
                 }
                 void FullRelease()override{ 
                         arr->FullRelease(); 
                         delete this; 
                 }
-                virtual NodeTy type() override { return NodeTy::Array; }
+                virtual NodeTy type() override { return NodeTy::ArrayAst; }
         };
-        class Hash: public virtual Expression{
+
+        class HashAst: public virtual Expression{
         public:
                 VecHelper<Expression>* arr;
                 VecHelper<Expression>* keys;
-                ~Hash() override { }
-                Hash(decltype(arr) arr,decltype(keys)keys):arr(arr),keys(keys){}
+                ~HashAst() override { }
+                HashAst(decltype(arr) arr,decltype(keys)keys):arr(arr),keys(keys){}
                 virtual ret_ty emit(inp_ty) override {
-                        std::wcerr << (L"Hash!( ");
+                        std::wcout << (L"#{");
+                        uint i = 0;
                         for(auto&x:arr->get()){
+                                keys->get()[i]->emit();
+                                ++i;
+                                std::wcout << L'=';
                                 x->emit();
-                                std::wcerr << L' ';
+                                if(i != arr->get().size()){
+                                        std::wcout << L',';
+                                }
                         }
-                        std::wcerr << L')';
+                        std::wcout << L"}";
                 }
-                virtual Value eval(Context*ctx)override{
-                        std::unordered_map<std::wstring,Value>* hash = new std::unordered_map<std::wstring,Value>();
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
+                        std::unordered_map<std::wstring,Expression*>* res = new std::unordered_map<std::wstring,Expression*>();
                         uint it = 0;
                         for(auto&x:arr->get()){
-                                auto keyval = keys->get()[it]->eval(ctx);
-                                if(keyval.type == ValType::String){
-                                        (*hash)[*keyval.str] = x->eval(ctx);
+                                auto keyval = dynamic_cast<String*>(keys->get()[it]->eval(ctx));
+                                if(keyval){
+                                        (*res)[*keyval->value] = x->eval(ctx);
                                 }
                                 ++it;
                         }
-                        return Value(hash);
+                        return new Hash(res);
                 }
                 void FullRelease()override{ 
                         arr->FullRelease(); 
                         keys->FullRelease();
                         delete this; 
                 }
-                virtual NodeTy type() override { return NodeTy::Hash; }
+                virtual NodeTy type() override { return NodeTy::HashAst; }
         };
-        class Show: public virtual Expression{
-                Expression * what;
-                bool newline;
-        public:
-                ~Show() override { }
-                Show(Expression* what, bool newline = false):what(what),newline(newline){}
-                virtual ret_ty emit(inp_ty) override {
-                        std::wcerr << (L"show!( "); what->emit(); std::wcerr << L" )\n";
-                }
-                virtual Value eval(Context*ctx)override{
-                        auto val = what->eval(ctx);
-                        print(val);
-                        if(newline){
-                                std::wcout << L'\n';
-                        }
-                        return val;
-                }
-                void FullRelease()override{ 
-                        what->FullRelease(); 
-                        delete this; 
-                }
-                virtual NodeTy type() override { return NodeTy::Show; }
-        };
+
         class Export: public virtual Expression{
                 Token variable;
         public:
                 ~Export() override { }
                 Export(const Token& variable):variable(variable){}
                 virtual ret_ty emit(inp_ty) override {
-                        std::wcerr << (L"export") << variable.str;
+                        std::wcout << (L"export ") << variable.str;
                 }
-                virtual Value eval(Context*ctx)override{
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
                         auto val = ctx->getVar(variable.str);
                         ctx = ctx->getRoot();
                         ctx->createVar(variable.str);
@@ -439,19 +581,7 @@ namespace Z{
                 }
                 virtual NodeTy type() override { return NodeTy::Export; }
         };
-        class Number: public virtual Expression{
-                double value;
-        public:
-                ~Number() override { }
-                Number(double value):value(value){}
-                virtual ret_ty emit(inp_ty) override {
-                        std::wcerr << value;
-                }
-                virtual Value eval(Context*ctx)override{
-                        return Value(value);
-                }
-                virtual NodeTy type() override { return NodeTy::Number; }
-        };
+
         class Lambda: public virtual Expression{
                 Expression* body;
                 VecHelper<Variable>* args;
@@ -461,14 +591,9 @@ namespace Z{
                 Lambda(Expression * body, VecHelper<Variable> *args, bool is_ellipsis=false):body(body),args(args),
                         is_ellipsis(is_ellipsis){}
                 virtual ret_ty emit(inp_ty) override {
-                        std::wcerr << L"lambda!( ";
-                        for(auto&x:args->get()){
-                                x->emit();
-                                std::wcerr << L" ";
-                        }
-                        if(is_ellipsis)std::wcerr << L"... ";
-                        std::wcerr << L")->";
-                        body->emit();
+                        std::wcout << L"(";
+                        Function(nullptr,body,args,is_ellipsis).emit();
+                        std::wcout << L")";
                 }
 
                 void FullRelease()override{ 
@@ -476,12 +601,57 @@ namespace Z{
                         body->FullRelease();
                         delete this; 
                 }
-                virtual Value eval(Context*ctx)override{
-                        ctx->AddRef();
-                        return Value(new Function(ctx,args,body,is_ellipsis));       
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
+                        //ctx->addRef();
+                        return new Function(ctx,body,args,is_ellipsis);       
                 }
                 virtual NodeTy type() override { return NodeTy::Lambda; }
         };
+
+        
+        class AstNode: public virtual Expression{
+        public:
+                Expression* expr;
+                Context* _ctx;
+                ~AstNode() override { /*_ctx->release();*/ }
+                AstNode(Expression* expr,Context * _ctx):expr(expr),_ctx(_ctx){}
+                virtual ret_ty emit(inp_ty) override {
+                        expr->emit();
+                }
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
+                        return expr->eval(_ctx);
+                }
+                virtual NodeTy type() override { return NodeTy::AstNode; }
+                virtual void FullRelease() override { 
+                        expr->FullRelease(); 
+                        delete this; 
+                }
+        };
+
+        class AstNodeExpr: public virtual Expression{
+                Expression* expr;
+        public:
+                ~AstNodeExpr() override { }
+                AstNodeExpr(Expression* expr):expr(expr){}
+                virtual ret_ty emit(inp_ty) override {
+                        std::wcout << L"${";
+                        expr->emit();
+                        std::wcout << L"}";
+                }
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
+                        //ctx->addRef();
+                        return new AstNode(expr,ctx);
+                }
+                virtual NodeTy type() override { return NodeTy::AstNodeExpr; }
+                virtual void FullRelease() override { 
+                        expr->FullRelease(); 
+                        delete this; 
+                }
+        };
+
         class FCall: public virtual Expression{
                 Expression* func;
                 VecHelper<Expression>* args;
@@ -490,71 +660,50 @@ namespace Z{
                 FCall(Expression * func, VecHelper<Expression> *args):func(func),args(args){}
                 virtual ret_ty emit(inp_ty) override {
                         func->emit();
-                        std::wcerr << L'(' << L' ';
+                        std::wcout << L'(' << L' ';
                         for(auto&x:args->get()){
                                 x->emit();
-                                std::wcerr << L' ';
+                                std::wcout << L' ';
                         }
-                        std::wcerr << L')';
+                        std::wcout << L')';
                 }
 
-                virtual Value eval(Context*ctx)override{
-                        Value fun;
-                        std::vector<Value> _args;
-                        BinOp *obj = dynamic_cast<decltype(obj)>(func);
-                        if(obj && (obj->op.str == L"." || obj->op.str == L"[")){
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
+                        Expression* fun;
+                        std::vector<Expression*> _args;
+                        BinOp *obj = func->as<BinOp>();
+                        if(obj && (obj->op == L"operator@.")){
                                 auto    _obj = obj->lhs->eval(ctx), 
                                         _key = obj->rhs->eval(ctx), __obj = _obj;
-                                if(_key.type == ValType::String && _obj.type!=ValType::Hash){
-                                        __obj = ctx->getVar(match_ty_tostr(_obj.type));
+                                if(_obj->type()!=NodeTy::Hash){
+                                        __obj = ctx->getVar(typeof_str(_obj->type()));
+                                        if(__obj->type()!=NodeTy::Hash){
+                                                return ctx->nil;
+                                        }
                                 }
-                                if(_key.type==ValType::String){
-                                        fun = getKey(__obj,*_key.str,ctx);
-                                        _args.push_back(_obj);
-                                }else if(_key.type == ValType::Number){
-                                        fun = getIdx(_obj,(int64_t)_key.num,ctx);
-                                }
+                                fun = __obj->as<Hash>()->get(ctx,*_key->as<String>()->value);
+                                _args.push_back(_obj);
                         }else{
                                 fun = func->eval(ctx);
                         }
                         for(auto&x:args->get()){
                                 if(dynamic_cast<Ellipsis*>(x)!=0){
                                         auto ell = x->eval(ctx);
-                                        for(auto&y:*ell.arr){
+                                        for(auto&y:*dynamic_cast<Array*>(ell)->value){
                                                 _args.push_back(y);
                                         }
                                 }else{
                                         _args.push_back(x->eval(ctx));
                                 }
                         }
-                        if(fun.type == ValType::NativeFunction){
-                                return fun.native(ctx,_args);
+                        if(fun->type() == NodeTy::NativeFunction){
+                                return fun->as<NativeFunction>()->call(ctx,_args);
                         }
-                        if(fun.type!=ValType::Function){
-                                return ctx->null;
+                        if(fun->type()==NodeTy::Function){
+                                return fun->as<Function>()->call(ctx, _args,false);
                         }       
-                        Context* _ctx = new Context(fun.fun->ctx);
-                        auto& vars = fun.fun->args->get();
-                        bool ell = fun.fun->is_ellipsis;
-                        for(uint j = 0; j<_args.size();++j){
-                                if(j+1==vars.size() && ell){
-                                        std::vector<Value>* rest = new std::vector<Value>();
-                                        for(uint k = j; k<_args.size();++k){
-                                                rest->push_back(_args[k]);
-                                        }
-                                        _ctx->createVar(vars.back()->getname());
-                                        _ctx->setVar(vars.back()->getname(), Value(rest));
-                                        break;
-                                }
-                                if(j>=vars.size()){
-                                        break;
-                                }
-                                _ctx->createVar(vars[j]->getname());
-                                _ctx->setVar(vars[j]->getname(),_args[j]);
-                        }
-                        auto res = fun.fun->body->eval(_ctx);
-                        _ctx->Release();
-                        return res;
+                        return ctx->nil;
                 }
                 virtual NodeTy type() override { return NodeTy::FCall; }
                 void FullRelease()override{  
@@ -570,10 +719,11 @@ namespace Z{
         public:
                 ~Import() override {}
                 Import(const Token& module,bool ret_mod = false):module(module),ret_mod(ret_mod){}
-                virtual ret_ty emit(inp_ty) override { std::wcerr << L"import " << module.str; }
-                virtual Value eval(Context*ctx)override{
-                        if(ctx->is_imported(module.str) && !ret_mod){
-                                return ctx->module_value(module.str);
+                virtual ret_ty emit(inp_ty) override { std::wcout << L"import " << module.str; }
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
+                        if(ctx->isImported(module.str) && !ret_mod){
+                                return ctx->moduleValue(module.str);
                         }
                         char * name = new char[module.str.length()*4+10];
                         wcstombs(name, module.str.c_str(), module.str.length()*4+1);
@@ -581,10 +731,9 @@ namespace Z{
                         std::wifstream in (name);
                         delete [] name;
                         if(!in){
-                                ctx->RaiseException(Value(new std::wstring(L"Failed to load module")));
-                                std::wcerr << L"Failed to load module " << module.str << L".z\n";
-                                ctx->setModuleValue(module.str, Value());
-                                return ctx->null;
+                                std::wcout << L"Failed to load module " << module.str << L".z\n";
+                                ctx->setModuleValue(module.str, ctx->nil);
+                                return ctx->nil;
                         }
                         extern Expression* Parse(const std::wstring&);
                         std::wstring buf = L"{", // no global variables :)
@@ -597,66 +746,24 @@ namespace Z{
                         in.close();
                         auto expr = Parse(std::wstring(buf));
                         if(!expr){
-                                ctx->setModuleValue(module.str, Value());
-                                return ctx->null;
+                                ctx->setModuleValue(module.str, ctx->nil);
+                                return ctx->nil;
                         }
-                        Context * _ctx = ret_mod?(new Context()):(new Context(ctx));
+                        Context * _ctx = ret_mod?(new Context(ctx->nil)):(new Context(ctx));
                         auto res = expr->eval(_ctx);
                         ctx->setModuleValue(module.str,res);
                         if(!ret_mod){
-                                _ctx->Release();
+                                /*_ctx->release();*/
                                 return res;
                         }
-                        auto mod = Value(new std::unordered_map<std::wstring, Value>(_ctx->getEnv()));
-                        _ctx->Release();
+                        auto mod = new Hash(_ctx->env);
+                        /*_ctx->release();*/
                         return mod;
 
                 }
                 virtual NodeTy type() override { return NodeTy::Import; }
         };
-        class AstNodeExpr: public virtual Expression{
-                Expression* expr;
-        public:
-                ~AstNodeExpr() override { }
-                AstNodeExpr(Expression* expr):expr(expr){}
-                virtual ret_ty emit(inp_ty) override {
-                        std::wcerr << L"expr!(";
-                        expr->emit();
-                        std::wcerr << L")";
-                }
-                virtual Value eval(Context*ctx)override{
-                        ctx->AddRef();
-                        return Value(expr,ctx);
-                }
-                virtual NodeTy type() override { return NodeTy::AstNodeExpr; }
-                virtual void FullRelease() override { 
-                        expr->FullRelease(); 
-                        delete this; 
-                }
-        };
-        class EvalExpr: public virtual Expression{
-                Expression* expr;
-        public:
-                ~EvalExpr() override { }
-                EvalExpr(Expression* expr):expr(expr){}
-                virtual ret_ty emit(inp_ty) override {                        
-                        std::wcerr << L"eval!(";
-                        expr->emit();
-                        std::wcerr << L")";
-                }
-                virtual Value eval(Context*ctx)override{
-                        auto hom = expr->eval(ctx);
-                        if(hom.type==ValType::Expression){
-                                return hom.expr->eval(hom.ctx);
-                        }
-                        return hom;
-                }
-                virtual NodeTy type() override { return NodeTy::EvalExpr; }
-                virtual void FullRelease() override { 
-                        expr->FullRelease(); 
-                        delete this; 
-                }
-        };
+
         class Match: public virtual Expression{
                 Expression* what;
                 VecHelper<Expression> *cond;
@@ -667,24 +774,29 @@ namespace Z{
                 Match(Expression*what, decltype(cond) cond, decltype(res) res, Expression* default_val):what(what),cond(cond),
                 res(res),default_val(default_val){}
                 virtual ret_ty emit(inp_ty) override {     
-                        std::wcerr << L"match!("; what->emit(); std::wcerr << L"){\n";
+                        std::wcout << L"match("; what->emit(); std::wcout << L"){";
                         for(auto i1 = cond->get().begin(), 
                                  i2 = res->get().begin(), 
                                  e1 = cond->get().end(), 
                                  e2 = res->get().end();
                                  i1!=e1 && i2!=e2; 
                                  ++i1,++i2){
-                                std::wcerr << L"\t|"; (*i1)->emit(); std::wcerr << L"->"; (*i2)->emit();
-                                std::wcerr << L'\n';
+                                (*i1)->emit(); std::wcout << L"=>"; (*i2)->emit();
+                                std::wcout << L'\t';
                         }
-                        std::wcerr << L"\t | _ => "; default_val->emit();
-                        std::wcerr << L"\n}";
+                        std::wcout << L"_ =>"; default_val->emit();
+                        std::wcout << L"}";
                 }
-                virtual Value eval(Context*ctx)override{
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
                         auto pattern = what->eval(ctx);
+                        auto equal = ctx->findBuiltinOp(L"operator@==");
+                        if(!equal){
+                                return ctx->nil;
+                        }
                         for(uint i=0;i<cond->get().size();++i){
                                 auto pattern2 = cond->get()[i]->eval(ctx);
-                                if(pattern2.num == pattern.num){
+                                if(equal(ctx, {pattern,pattern2})){
                                         return res->get()[i]->eval(ctx);
                                 }
                         }
@@ -699,6 +811,7 @@ namespace Z{
                 }
                 virtual NodeTy type() override { return NodeTy::Match; }
         };
+
         class Cond: public virtual Expression{
                 VecHelper<Expression> *cond;
                 VecHelper<Expression> *res;
@@ -706,26 +819,27 @@ namespace Z{
                 ~Cond() override { }
                 Cond(decltype(cond) cond, decltype(res) res):cond(cond),res(res){}
                 virtual ret_ty emit(inp_ty) override {     
-                        std::wcerr << L"cond!" << L"{\n";
+                        std::wcout << L"cond" << L"{\t";
                         for(auto i1 = cond->get().begin(), 
                                  i2 = res->get().begin(), 
                                  e1 = cond->get().end(), 
                                  e2 = res->get().end();
                                  i1!=e1 && i2!=e2; 
                                  ++i1,++i2){
-                                std::wcerr << L"\t|"; (*i1)->emit(); std::wcerr << L"->"; (*i2)->emit();
-                                std::wcerr << L'\n';
+                                (*i1)->emit(); std::wcout << L"=>"; (*i2)->emit();
+                                std::wcout << L'\t';
                         }
-                        std::wcerr << L"}";
+                        std::wcout << L"}";
                 }
-                virtual Value eval(Context*ctx)override{
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
                         for(uint i=0;i<cond->get().size();++i){
                                 auto pattern = cond->get()[i]->eval(ctx);
                                 if(to_bool(pattern)){
                                         return res->get()[i]->eval(ctx);
                                 }
                         }
-                        return ctx->null;
+                        return ctx->nil;
                 }
                 void FullRelease()override{ 
                         res->FullRelease();
@@ -734,27 +848,29 @@ namespace Z{
                 }
                 virtual NodeTy type() override { return NodeTy::Cond; }
         };
+
         class Block: public virtual Expression{
         public:
                 VecHelper<Expression>* block;
                 ~Block() override { }
                 Block(VecHelper<Expression>* block):block(block){}
                 virtual ret_ty emit(inp_ty) override {                        
-                        std::wcerr << L"{\n";
+                        std::wcout << L"{\n";
                         for(auto&x:block->get()){
-                                std::wcerr << L'\t';
+                                std::wcout << L'\t';
                                 x->emit();
-                                std::wcerr << L'\n';
+                                std::wcout << L";\n";
                         }
-                        std::wcerr << L"}";
+                        std::wcout << L"}";
                 }
-                virtual Value eval(Context*ctx)override{
-                        Value last;
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
+                        Expression* last;
                         Context *_ctx = new Context(ctx);
                         for(auto&x:block->get()){
                                 last = x->eval(_ctx);
                         }
-                        _ctx->Release();
+                        /*_ctx->release();*/
                         return last;
                 }
                 virtual NodeTy type() override { return NodeTy::Block; }
@@ -763,6 +879,7 @@ namespace Z{
                         delete this; 
                 }
         };
+
         class Let: public virtual Expression{
                 Token name;
                 Expression* value;
@@ -770,12 +887,13 @@ namespace Z{
                 ~Let() override { }
                 Let(const Token& name, Expression* value):name(name),value(value){}
                 virtual ret_ty emit(inp_ty) override { 
-                        std::wcerr << L"let "<< name.str << L" = "; 
+                        std::wcout << L"let "<< name.str << L" = "; 
                         value->emit();
                 }
-                virtual Value eval(Context*ctx)override{
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
                         ctx->createVar(name.str);
-                        Value val;
+                        Expression* val;
                         ctx->setVar(name.str,val = value->eval(ctx));
                         return val;
                 }
@@ -785,6 +903,7 @@ namespace Z{
                 }
                 virtual NodeTy type() override { return NodeTy::Let; }
         };
+
         class Var: public virtual Expression{
                 Token name;
                 Expression* value;
@@ -792,26 +911,54 @@ namespace Z{
                 ~Var() override { }
                 Var(const Token& name, Expression* value):name(name),value(value){}
                 virtual ret_ty emit(inp_ty) override { 
-                        std::wcerr << L"var "<< name.str << L" = "; 
+                        std::wcout << L"var "<< name.str << L" = "; 
                         if(value){
                                 value->emit();
                         } else {
-                                std::wcerr << L"nil";
+                                std::wcout << L"nil";
                         }
                 }
-                virtual Value eval(Context*ctx)override{
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
                         ctx->createVar(name.str);
                         if(!value){
-                                return ctx->null;
+                                return ctx->nil;
                         }
-                        Value val;
+                        Expression* val;
                         ctx->setVar(name.str,val = value->eval(ctx));
                         return val;
                 }
                 void FullRelease()override{ 
-                        value->FullRelease(); 
+                        if(value){
+                                value->FullRelease();
+                        } 
                         delete this; 
                 }
                 virtual NodeTy type() override { return NodeTy::Var; }
         };
+
+        namespace {
+                bool to_bool(Expression* expr){
+                        if(expr->type()==NodeTy::Nil){
+                                return false;
+                        }
+                        if(expr->type()==NodeTy::Boolean){
+                                return expr->as<Boolean>()->value;
+                        }
+                        return true;
+                }
+                std::wstring typeof_str(NodeTy ty){
+                        #define _case(x) case NodeTy:: x : return L## #x
+                        switch(ty){
+                                _case(Number);
+                                _case(String);
+                                _case(Boolean);
+                                _case(Nil);
+                                _case(Hash);
+                                _case(Array);
+                                default: return L"Expression";
+                        }
+                        #undef _case
+                }
+        }
 }

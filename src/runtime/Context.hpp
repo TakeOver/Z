@@ -1,33 +1,35 @@
 #pragma once
 #include <string>
 #include <iostream>
-#include "Value.hpp"
+#include <vector>
 #include <unordered_map>
 namespace Z{
+        class Expression;
+        class Context;
+        typedef Expression* (*native_fun_t)(Context*,const std::vector<Expression*> & args);
         class Context
         {
                 long refcnt = 1;
                 Context * parent;
-                std::unordered_map<std::wstring, Value> env;
-                bool _is_try = false;
-                std::unordered_map<std::wstring, Value> *imported_modules;
+                std::unordered_map<std::wstring, Expression*> *imported_modules;
+                std::unordered_map<std::wstring,native_fun_t> * builtin_ops;
         public:
-                Value null;
+                std::unordered_map<std::wstring, Expression*> *env;
+                Expression* nil;
                 Context(Context * parent);
-                Context();
-                decltype(env)& getEnv();
-                void SetTry();
+                Context(Expression*);
                 bool deleteVar(const std::wstring&);
-                bool is_imported(const std::wstring & );
-                Value RaiseException(const Value& excep);
+                bool isImported(const std::wstring & );
                 ~Context();
-                void setModuleValue(const std::wstring&str,Value val);
-                Value module_value(const std::wstring &);
-                void Release();
+                void setModuleValue(const std::wstring&str,Expression* val);
+                Expression* moduleValue(const std::wstring &);
+                //void release();
                 Context* getRoot();
-                Value& getVar(const std::wstring & name);
-                bool setVar(const std::wstring &name, const Value& val);
+                Expression*& getVar(const std::wstring & name);
+                bool setVar(const std::wstring &name, Expression* val);
                 void createVar(const std::wstring &name);
-                void AddRef();
+               // void addRef();
+                void defBuiltinOp(const std::wstring&,native_fun_t);
+                native_fun_t findBuiltinOp(const std::wstring&);
         };
 }

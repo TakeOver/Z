@@ -1,88 +1,97 @@
 #include "Context.hpp"
+#include "../ast/basic_node.hpp"
 namespace Z{
-        namespace { using ctx = Context; }
-                ctx::Context(Context * parent):parent(parent){
-                        parent->AddRef();
-                        this->imported_modules = parent->imported_modules;
+        namespace { 
+                void init(Context* ctx){
+                        ctx->env = new std::unordered_map<std::wstring, Expression*>();                        
                 }
-                ctx::Context():parent(nullptr){
-                        this->imported_modules = new std::unordered_map<std::wstring, Value>();
-                }
-
-                Value ctx::RaiseException(const Value& excep){ // TODO IMPLEMENTATION
-                        if(_is_try){
-                                return Value();
+                template<typename K,typename V> bool contains(K&k,V&v){
+                        return k.find(v)!=k.end();
+                } 
+        }
+        Context::Context(Expression* nil){
+                init(this);
+                this->nil = nil;
+                imported_modules = new std::unordered_map<std::wstring, Expression*>();
+                builtin_ops =      new std::unordered_map<std::wstring, native_fun_t>();
+                nil              = nullptr;
+                parent           = nullptr;
+        }
+        Context::Context(Context * parent){
+                init(this);
+             //   parent->addRef();
+                this->parent = parent;
+                this->nil = parent->nil;
+                this->imported_modules = parent->imported_modules;
+                this->builtin_ops = parent->builtin_ops;
+        }
+        Context::~Context(){
+            /*    if(parent){
+                        parent->release();
+                }*/
+                //env is collectable.
+        }/*
+        void Context::release(){
+                if ( -- refcnt ) {
+                        if(parent){
+                                parent->release();
                         }
-                        std::wcerr << (*(excep.str)) << L'\n';
-                        exit(0);
+                        delete this;
                 }
-
-                ctx::~Context(){
-                        if(!parent){
-                                delete this->imported_modules;
-                        }
-                }
-                bool ctx::deleteVar(const std::wstring& name){
-                        if(env.find(name)!=env.end()){
-                                env.erase(name);
-                                return true;
-                        }
-                        if(!parent){
-                                return false;
-                        }
-                        return parent->deleteVar(name);
-                }
-                void ctx::setModuleValue(const std::wstring&str,Value val){
-                        this->imported_modules->insert({str,val});
-                }
-                void ctx::SetTry(){
-                        _is_try = true;
-                }
-                bool ctx::is_imported(const std::wstring& name ){
-                        return this->imported_modules->find(name)!=this->imported_modules->end();
-                }
-                Value ctx::module_value(const std::wstring & name){
-                        return is_imported(name)?this->imported_modules->find(name)->second:null;
-                }
-                void ctx::Release(){
-                        if(--refcnt <= 0){
-                                if(parent){
-                                        parent->Release();
-                                }
-                                delete this;
-                        }
-                }
-                decltype(ctx::env)& ctx::getEnv(){ return env; }
-                Context* ctx::getRoot(){
-                        if(!parent){
-                                return this;
-                        }
-                        return parent->getRoot();
-                }
-                Value& ctx::getVar(const std::wstring & name){
-                        if(env.find(name)==env.end()){
-                                if(!parent){
-                                        return null;
-                                }
-                                return parent->getVar(name);
-                        }
-                        return env[name];
-                }
-                bool ctx::setVar(const std::wstring &name, const Value& val){
-                        if(env.find(name)!=env.end()){
-                                env[name]=val;
-                                return true;
-                        }
-                        if(!parent){
-                                return false;
-                        }
-                        if(!parent->setVar(name,val)){
-                                return false;
-                        }
+        }*/
+        bool Context::deleteVar(const std::wstring& key){
+                if (contains(*env,key)) {
+                        env->erase(key);
                         return true;
                 }
-                void ctx::createVar(const std::wstring &name){
-                        env[name]=null;
+                if(!parent){
+                        return false;
                 }
-                void ctx::AddRef(){ ++ refcnt; }
+                return parent->deleteVar(key);
+        }
+        bool Context::isImported(const std::wstring& key){
+                return contains(*imported_modules,key);
+        }
+        void Context::setModuleValue(const std::wstring& key,Expression* value){
+                (*this->imported_modules)[key]=value;
+        }
+        Expression* Context::moduleValue(const std::wstring& key){
+                if(contains(*imported_modules,key)){
+                        return imported_modules->find(key)->second;
+                }
+                return nil;
+        }
+        Context* Context::getRoot(){ return parent; }
+        Expression*& Context::getVar(const std::wstring& key){
+                if ( contains(*env,key) ) {
+                        return env->find(key)->second;
+                }
+                if ( parent ) {
+                        return parent->getVar(key);
+                }
+                return this->nil;
+        }
+        bool Context::setVar(const std::wstring& key, Expression* value){
+                if ( contains(*env,key) ) {
+                        env->find(key)->second = value;
+                        return true;
+                }
+                if(parent){
+                        return parent->setVar(key,value);
+                }
+                return false;
+        }
+        void Context::createVar(const std::wstring& name){
+                env->insert({name,nil});
+        }
+       // void Context::addRef(){ ++ refcnt; }
+        native_fun_t Context::findBuiltinOp(const std::wstring& key){
+                if ( contains(*builtin_ops,key) ) {
+                        return builtin_ops->find(key)->second;
+                }
+                return nullptr;
+        }
+        void Context::defBuiltinOp(const std::wstring& key,native_fun_t func){
+                (*builtin_ops)[key]=func;
+        }
 }

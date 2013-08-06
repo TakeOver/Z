@@ -22,27 +22,31 @@ namespace Z{
                 Block,
                 Let,
                 Var,
-                EvalExpr,
+                NativeFunction,
                 Import,
                 Delete,
                 Boolean,
                 Nil,
+                Function,
                 Export,
                 Cond,
-                Show,
                 Array,
                 Hash,
                 While,
                 For,
-                Ellipsis
+                Ellipsis,
+                AstNode,
+                ArrayAst,
+                HashAst
         };
         class Expression {
         public:
                 virtual ~Expression(){}
                 virtual ret_ty emit(inp_ty) = 0;
-                virtual Value eval(Context*) = 0;
+                virtual Expression* eval(Context*) = 0;
                 virtual NodeTy type() = 0; 
                 virtual void FullRelease() { delete this; }
+                template<typename T> T* as(){ return dynamic_cast<T*>(this); }
         };
         template<typename K> class VecHelper: public virtual Expression{
                 uint64_t _reg = 0;
@@ -51,7 +55,7 @@ namespace Z{
                 ~VecHelper() override { }
                 VecHelper(const std::vector<K*>& v):container(v){}
                 virtual ret_ty emit(inp_ty) override {}
-                virtual Value eval(Context* ctx){ return ctx->null; };
+                virtual Expression* eval(Context* ctx){ return ctx->nil; };
                 virtual NodeTy type() override { return NodeTy::VecHelper; }
                 void FullRelease() override {
                         for(auto&x:container){

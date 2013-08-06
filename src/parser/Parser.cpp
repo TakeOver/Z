@@ -34,7 +34,6 @@ namespace Z{
                 tkn.DefKw(L";",SubTokTy::Semicolon,true);
                 tkn.DefKw(L"class",SubTokTy::Class,true);
                 tkn.DefKw(L"...",SubTokTy::Ellipsis,true);
-                tkn.DefKw(L"eval!",SubTokTy::Eval,true);
                 tkn.DefKw(L"delete",SubTokTy::Delete,true);
                 tkn.DefKw(L"export",SubTokTy::Export,true);
                 tkn.DefKw(L"match",SubTokTy::Match,true);
@@ -47,8 +46,6 @@ namespace Z{
                 tkn.DefKw(L"while",SubTokTy::While,true);
                 tkn.DefKw(L"cond",SubTokTy::Cond,true);
                 tkn.DefKw(L"to",SubTokTy::To,true);
-                tkn.DefKw(L"show!",SubTokTy::Show,true);
-                tkn.DefKw(L"showln!",SubTokTy::Showln,true);
                 tkn.DefKw(L"true",SubTokTy::True,true);
                 tkn.DefKw(L"false",SubTokTy::False,true);
                 tkn.DefKw(L"nil",SubTokTy::Nil,true);
@@ -131,7 +128,7 @@ namespace Z{
                 if(!lhs){
                         return nullptr;
                 }
-                return new UnOp(op,lhs);
+                return new UnOp(op.str,lhs);
         }
         Expression* p::expectBinary(int64_t prec, Expression* lhs){
                 DBG_TRACE();
@@ -260,7 +257,7 @@ namespace Z{
                         return nullptr;
                 }
                 tkn.Next();
-                return new Array(new VecHelper<Expression>(vec));
+                return new ArrayAst(new VecHelper<Expression>(vec));
         }
         Expression* p::expectHash(){
                 tkn.Next();
@@ -306,7 +303,7 @@ namespace Z{
                         return nullptr;
                 }
                 tkn.Next();
-                return new Hash(new VecHelper<Expression>(vals),new VecHelper<Expression>(keys));
+                return new HashAst(new VecHelper<Expression>(vals),new VecHelper<Expression>(keys));
         }
         Expression* p::expectBlock(){
                 tkn.Next();
@@ -448,16 +445,9 @@ namespace Z{
                                         case SubTokTy::True: {tkn.Next(); return new Boolean(true);}
                                         case SubTokTy::False: {tkn.Next(); return new Boolean(false);}
                                         case SubTokTy::Nil: {tkn.Next(); return new Nil();}
-                                        case SubTokTy::Eval:{
-                                                tkn.Next();
-                                                auto expr = expectExpression();
-                                                if(!expr){
-                                                        return nullptr;
-                                                }
-                                                return new EvalExpr(expr);
-                                        }
                                         case SubTokTy::Export: {
-                                                auto var = tkn.Next();
+                                                auto var = tkn.Next();                                                        
+                                                tkn.Next();
                                                 if(var.ty==TokTy::Identifer && !var.sty){
                                                         return new Export(var);
                                                 }
@@ -498,22 +488,6 @@ namespace Z{
                                                                 new VecHelper<Expression>({iftrue,iffalse}));
                                         }
                                         case SubTokTy::Import: return expectImport();
-                                        case SubTokTy::Show: {
-                                                tkn.Next();
-                                                auto expr = expectExpression();
-                                                if(!expr){
-                                                        return nullptr;
-                                                }
-                                                return new Show(expr);
-                                        }
-                                        case SubTokTy::Showln:{
-                                                tkn.Next();
-                                                auto expr = expectExpression();
-                                                if(!expr){
-                                                        return nullptr;
-                                                }
-                                                return new Show(expr,true);
-                                        }
                                         default: setError(L"Primary expected[0]",tok); return nullptr;
                                 }
                         }
