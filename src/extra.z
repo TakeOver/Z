@@ -1,11 +1,12 @@
+
 let eval = (what) -> 
         eval!(parse!(what))
 
 let showln! = (args...) -> 
-        show!(...args,"\n")
+        show!(...args,"\n");
 
 let read! = () -> 
-        parse!(input())
+        parse!(input());
 
 let map = (func, list) -> {
         var res = []
@@ -30,7 +31,7 @@ let compose = (fun1,fun2) ->
         (args...) -> 
                 fun1(fun2(...args))
 
-let bind = (self,method) -> 
+let bind! = (self,method) -> 
         (args...) ->
                 method(self,...args)
 
@@ -44,6 +45,7 @@ export for_each
 export reduce
 export map
 export eval
-export read
+export read!
 export compose
-export bind
+export bind!
+export showln!

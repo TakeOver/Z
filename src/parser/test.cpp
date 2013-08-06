@@ -252,6 +252,28 @@ Expression* _assign(Z::Context* ctx, const std::vector<Expression*>&args){
         }
 
 }
+
+Expression* _createVar(Z::Context* ctx, const std::vector<Expression*>&args){
+        for(auto&x:args){
+                auto expr = x->eval(ctx);
+                if(expr->type() == NodeTy::String){
+                        ctx->createVar(*expr->as<String>()->value);
+                }else if(expr->type() == NodeTy::AstNode && expr->as<AstNode>()->expr->type()==NodeTy::Variable){
+                        auto var = expr->as<AstNode>();
+                        ctx->createVar(var->expr->as<Variable>()->getname());
+                        if(ctx!=var->_ctx){
+                              //  var->_ctx->release();
+                                var->_ctx = ctx;
+                              //ctx->addRef();  
+                        }
+                }
+        }
+        return ctx->nil;
+}
+Expression* _current(Z::Context* ctx, const std::vector<Expression*>&args){
+        return new Hash(ctx->env);
+}
+
 int main(){
         Context* ctx = new Context(new Nil());
         ctx->defBuiltinOp(L"binary@+",add);
@@ -288,11 +310,18 @@ int main(){
         {L"ast",new Hash(new std::unordered_map<std::wstring, Expression*>({
                         {L"append",new NativeFunction(append)}}))
         },      {L"str",new Hash(new std::unordered_map<std::wstring,Expression*>({
-                        {L"len",new NativeFunction(len)}}))}})));
-        Parser par(L"import object; import extra;");
+                        {L"len",new NativeFunction(len)}}))},
+                {L"Env",new Hash(new std::unordered_map<std::wstring, Expression*>({
+                        {L"createVar",new NativeFunction(_createVar)},
+                        {L"current",new NativeFunction(_current)}
+                }))}})));
+        Parser par(L"import object;");
         std::vector<Z::Expression*> image; 
         image.push_back(par.Parse());
+        par.reset().setCode(L"import extra");
+        image.push_back(par.Parse());
         image.front()->eval(ctx);
+        image.back()->eval(ctx);
         std::wcout << L">>";
         while(true){
                 std::wstring buf, tmp;
