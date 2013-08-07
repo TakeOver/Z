@@ -395,7 +395,7 @@ namespace Z{
                                         case SubTokTy::Dollar: {
                                                 auto tok = tkn.Next();
                                                 if ( is_op(tok.str) ) {
-                                                        tok.str = L"b@" + tok.str;
+                                                        tok.str = L"binary@" + tok.str;
                                                         tkn.Next();
                                                         return new Variable(tok);
                                                 }
@@ -561,7 +561,7 @@ namespace Z{
                         if(!body){
                                 return nullptr;
                         }
-                        return new Lambda(body,new VecHelper<Variable>({}));
+                        return new Lambda(body,new VecHelper<Variable>(new std::vector<Variable*>()));
 
                 }
                 bool is_ell = false;

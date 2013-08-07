@@ -68,14 +68,11 @@ namespace Z{
                         delete this;
                 }
                 void MarkChilds(std::set<Collectable*> & marked) override {
-                        if(contains(marked,this)){ 
-                                return;
-                        }
+                        marked.insert(this);
                         for(auto&x:*container){
                                 if(contains(marked,x)){
                                         continue;
                                 }
-                                marked.insert(x);
                                 x->MarkChilds(marked);
                         }
                 }

@@ -32,18 +32,27 @@ namespace Z{
         class Variable: public virtual Expression{
         public:
                 Token name;
+
                 ~Variable() override { }
+
                 Variable(const Token& name):name(name){}
+
                 virtual ret_ty emit(inp_ty) override {
                         std::wcout << name.str;
                 }
+
                 virtual Expression* eval(Context*ctx)override{
                         DBG_TRACE();
                         return ctx->getVar(name.str);
                 }
+
                 virtual NodeTy type() override { return NodeTy::Variable; }
+
                 std::wstring getname(){ return name.str; }
-                void MarkChilds(std::set<Collectable*>&) override {}
+
+                void MarkChilds(std::set<Collectable*>&marked) override {
+                        marked.insert(this);
+                }
         };
 
         class Array: public virtual Expression{
@@ -95,6 +104,7 @@ namespace Z{
                         return (*arr)[key] = _value;
                 }
                 void MarkChilds(std::set<Collectable*>& marked) override {
+                        marked.insert(this);
                         value->MarkChilds(marked);
                 }
                 virtual NodeTy type() override { return NodeTy::Array; }
@@ -125,8 +135,8 @@ namespace Z{
                 }
 
                 void MarkChilds(std::set<Collectable*>& marked) override {
+                        marked.insert(this);
                         _ctx->MarkChilds(marked);
-                        marked.insert(body);
                         body->MarkChilds(marked);
                         args->MarkChilds(marked);
                 }
@@ -166,13 +176,13 @@ namespace Z{
                 virtual NodeTy type() override { return NodeTy::Function; }
         };
 
-        class NativeFunction: public virtual Expression{
+        class NativeFunction: public virtual Expression {
         public:
                 native_fun_t func_ptr;
                 ~NativeFunction() override { }
                 NativeFunction(native_fun_t func_ptr):func_ptr(func_ptr){ }
                 virtual ret_ty emit(inp_ty) override {
-                        std::wcout << L"NativeFunction!";
+                        std::wcout << L"Native.Functions[\"p@" << (intptr_t) func_ptr << L"\"]";
                 }
                 virtual Expression* eval(Context*ctx)override{
                         DBG_TRACE();
@@ -182,7 +192,9 @@ namespace Z{
                 Expression* call(Context* ctx, const std::vector<Expression*>& args){
                         return func_ptr(ctx,args);
                 }
-                void MarkChilds(std::set<Collectable*>& marked) override {}
+                void MarkChilds(std::set<Collectable*>& marked) override {
+                        marked.insert(this);
+                }
         };
 
         class BinOp: public virtual Expression{
@@ -226,8 +238,7 @@ namespace Z{
                         delete this; 
                 }
                 void MarkChilds(std::set<Collectable*>& marked) override {
-                        marked.insert(lhs);
-                        marked.insert(rhs);
+                        marked.insert(this);
                         lhs->MarkChilds(marked);
                         rhs->MarkChilds(marked);
                 }
@@ -268,7 +279,7 @@ namespace Z{
                         delete this; 
                 }
                 void MarkChilds(std::set<Collectable*>& marked) override {
-                        marked.insert(lhs);
+                        marked.insert(this);
                         lhs->MarkChilds(marked);
                 }
                 virtual NodeTy type() override { return NodeTy::UnOp; }
@@ -292,15 +303,22 @@ namespace Z{
                         delete value; 
                         delete this; 
                 }
-                void MarkChilds(std::set<Collectable*>& marked) override {}
+                void MarkChilds(std::set<Collectable*>& marked) override {
+                        marked.insert(this);
+                }
                 virtual NodeTy type() override { return NodeTy::String; }
         };
 
         class Hash: public virtual Expression{
         public:
                 std::unordered_map<std::wstring, Expression*>* value;
-                ~Hash() override { }
-                Hash(decltype(value) value):value(value){}
+                bool owned;
+                ~Hash() override { 
+                        if(owned){
+                                delete value;     
+                        }
+                }
+                Hash(decltype(value) value, bool owned = true):value(value),owned(owned){}
                 virtual ret_ty emit(inp_ty) override {
                         std::wcout << L"#{";
                         uint i = 0;
@@ -334,11 +352,11 @@ namespace Z{
                         return value;
                 }
                 void MarkChilds(std::set<Collectable*>& marked) override {
+                        marked.insert(this);
                         for(auto&x:*value){
                                 if(contains(marked,x.second)){
                                         continue;
                                 }
-                                marked.insert(x.second);
                                 x.second->MarkChilds(marked);
                         }
                 }
@@ -357,7 +375,9 @@ namespace Z{
                         DBG_TRACE();
                         return this;       
                 }
-                void MarkChilds(std::set<Collectable*>& marked) override {}
+                void MarkChilds(std::set<Collectable*>& marked) override {
+                        marked.insert(this);
+                }
                 virtual NodeTy type() override { return NodeTy::Boolean; }
         };
 
@@ -372,7 +392,9 @@ namespace Z{
                         DBG_TRACE();
                         return this;       
                 }
-                void MarkChilds(std::set<Collectable*>& marked) override {}
+                void MarkChilds(std::set<Collectable*>& marked) override {
+                        marked.insert(this);
+                }
                 virtual NodeTy type() override { return NodeTy::Nil; }
         };
 
@@ -415,7 +437,7 @@ namespace Z{
                         return ctx->nil;
                 }
                 void MarkChilds(std::set<Collectable*>& marked) override {
-                        marked.insert(what);
+                        marked.insert(this);
                         what->MarkChilds(marked);
                 }
                 void FullRelease()override{ 
@@ -442,7 +464,7 @@ namespace Z{
                         return ell;
                 }
                 void MarkChilds(std::set<Collectable*>& marked) override {
-                        marked.insert(what);
+                        marked.insert(this);
                         what->MarkChilds(marked);
                 }
                 void FullRelease()override{ 
@@ -499,12 +521,9 @@ namespace Z{
 
                 }
                 void MarkChilds(std::set<Collectable*>& marked) override {
-                        marked.insert(var);
-                        marked.insert(from);
+                        marked.insert(this);
                         from->MarkChilds(marked);
-                        marked.insert(to);
                         to->MarkChilds(marked);
-                        marked.insert(body);
                         body->MarkChilds(marked);
                 }
                 void FullRelease()override{ 
@@ -543,9 +562,8 @@ namespace Z{
                         delete this; 
                 }
                 void MarkChilds(std::set<Collectable*>& marked) override {
-                        marked.insert(cond);
+                        marked.insert(this);
                         cond->MarkChilds(marked);
-                        marked.insert(body);
                         body->MarkChilds(marked);
                 }
                 virtual NodeTy type() override { return NodeTy::While; }
@@ -580,6 +598,7 @@ namespace Z{
                         return new Array(new VecHelper<Expression>(res));
                 }
                 void MarkChilds(std::set<Collectable*>& marked) override {
+                        marked.insert(this);
                         arr->MarkChilds(marked);
                 }
                 void FullRelease()override{ 
@@ -628,6 +647,7 @@ namespace Z{
                         delete this; 
                 }
                 void MarkChilds(std::set<Collectable*>& marked) override {
+                        marked.insert(this);
                         arr->MarkChilds(marked);
                         keys->MarkChilds(marked);
                 }
@@ -650,7 +670,9 @@ namespace Z{
                         ctx->setVar(variable.str, val);
                         return val;
                 }
-                void MarkChilds(std::set<Collectable*>& marked) override {}
+                void MarkChilds(std::set<Collectable*>& marked) override {
+                        marked.insert(this);
+                }
                 virtual NodeTy type() override { return NodeTy::Export; }
         };
 
@@ -677,7 +699,7 @@ namespace Z{
                         return new Function(ctx,body,args,is_ellipsis);       
                 }
                 void MarkChilds(std::set<Collectable*>& marked) override {
-                        marked.insert(body);
+                        marked.insert(this);
                         body->MarkChilds(marked);
                         args->MarkChilds(marked);
                 }
@@ -706,9 +728,8 @@ namespace Z{
                         delete this; 
                 }
                 void MarkChilds(std::set<Collectable*>& marked) override {
-                        marked.insert(_ctx);
+                        marked.insert(this);
                         _ctx->MarkChilds(marked);
-                        marked.insert(expr);
                         expr->MarkChilds(marked);
                 }
         };
@@ -734,8 +755,8 @@ namespace Z{
                         delete this; 
                 }
                 void MarkChilds(std::set<Collectable*>& marked) override {
-                        marked.insert(expr);
                         expr->MarkChilds(marked);
+                        marked.insert(this);
                 }
         };
 
@@ -802,7 +823,7 @@ namespace Z{
                         delete this; 
                 }
                 void MarkChilds(std::set<Collectable*>& marked) override {
-                        marked.insert(func);
+                        marked.insert(this);
                         func->MarkChilds(marked);
                         args->MarkChilds(marked);
                 }
@@ -856,7 +877,10 @@ namespace Z{
                         return mod;
 
                 }
-                void MarkChilds(std::set<Collectable*>& marked) override { }
+                void MarkChilds(std::set<Collectable*>& marked) override {
+                        marked.insert(this);
+                }
+
                 virtual NodeTy type() override { return NodeTy::Import; }
         };
 
@@ -901,9 +925,8 @@ namespace Z{
                         return default_val->eval(ctx);
                 }
                 void MarkChilds(std::set<Collectable*>& marked) override {
-                        marked.insert(what);
+                        marked.insert(this);
                         what->MarkChilds(marked);
-                        marked.insert(default_val);
                         default_val->MarkChilds(marked);
                         cond->MarkChilds(marked);
                         res->MarkChilds(marked);
@@ -954,6 +977,7 @@ namespace Z{
                         delete this; 
                 }
                 void MarkChilds(std::set<Collectable*>& marked) override {
+                        marked.insert(this);
                         cond->MarkChilds(marked);
                         res->MarkChilds(marked);
                 }
@@ -990,6 +1014,7 @@ namespace Z{
                         delete this; 
                 }
                 void MarkChilds(std::set<Collectable*>& marked) override {
+                        marked.insert(this);
                         block->MarkChilds(marked);
                 }
         };
@@ -1017,7 +1042,7 @@ namespace Z{
                         delete this; 
                 }
                 void MarkChilds(std::set<Collectable*>& marked) override {
-                        marked.insert(value);
+                        marked.insert(this);
                         value->MarkChilds(marked);
                 }
                 virtual NodeTy type() override { return NodeTy::Let; }
@@ -1054,7 +1079,7 @@ namespace Z{
                         delete this; 
                 }
                 void MarkChilds(std::set<Collectable*>& marked) override {
-                        marked.insert(value);
+                        marked.insert(this);
                         value->MarkChilds(marked);
                 }
                 virtual NodeTy type() override { return NodeTy::Var; }
@@ -1079,7 +1104,10 @@ namespace Z{
                                 _case(Nil);
                                 _case(Hash);
                                 _case(Array);
-                                default: return L"Expression";
+                                _case(Function);
+                                _case(NativeFunction);
+                                case NodeTy::AstNode: return L"Expression";
+                                default: return L"UndefinedExpression";
                         }
                         #undef _case
                 }

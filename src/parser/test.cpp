@@ -278,7 +278,7 @@ Expression* _createVar(Z::Context* ctx, const std::vector<Expression*>&args){
         return ctx->nil;
 }
 Expression* _current(Z::Context* ctx, const std::vector<Expression*>&args){
-        return new Hash(ctx->env);
+        return new Hash(ctx->env,false);
 }
 
 int main(){
@@ -329,12 +329,15 @@ int main(){
         image.push_back(par.Parse());
         image.front()->eval(ctx);
         image.back()->eval(ctx);
-        std::wcout << L">>";
+        std::wcout << L"REPL>";
+        std::set<Collectable*> marked_old;
+        #define iterate_vec(x,y) for(auto&t:y) { x.insert(t); t->MarkChilds(x); }
+        iterate_vec(marked_old,image);
         while(true){
                 std::wstring buf, tmp;
                 while(true){
                         std::getline(std::wcin,tmp);
-                        if(tmp == L";;"){
+                        if(tmp == L"run"){
                                 break;
                         }
                         buf+=tmp + L'\n';
@@ -346,10 +349,27 @@ int main(){
                         std::wcout << "[Error!]:" << par.ErrorMsg() << L'\n';
                 }else{
                         image.push_back(expr);
-                        std::wcout << L">>>>\t";
-                        Z::print(expr->eval(evalctx));
-                        std::wcout << L"\n>>";
+                        auto val = expr->eval(evalctx);
+                        std::wcout << L"=>\t";
+                        val->emit(); 
+                        std::wcout << L"\t[type:" << typeof_str(val->type()) << L"]";
+                        std::wcout << L"\nREPL>";
                 }
+                std::set<Collectable*> new_marked;
+                iterate_vec(new_marked,image);
+                for(auto&x:marked_old){
+                        if(!contains(new_marked,x)){
+                                std::wcerr << L"Collecting:\n";
+                                auto expr = dynamic_cast<Expression*>(x);
+                                if(!expr){
+                                        std::wcerr << L"<ctx>\n";
+                                }else{
+                                        expr->emit();
+                                }
+                                delete x;
+                        }
+                }
+                marked_old = new_marked;
         }
 
 }

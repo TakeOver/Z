@@ -140,6 +140,9 @@ namespace Z{
                 std::wstring res; res = _curChar();
                 wchar_t c;
                 while((c=_nextChar()) && (is_num1(c)))res+=c;
+                if(res.back() == L'.'){
+                        position--;
+                }
                 return res;
         }
         std::wstring tk::_id() const {
