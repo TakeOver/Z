@@ -31,10 +31,7 @@ Expression* show(Context* ctx, const std::vector<Expression*>& args){
 }
 Expression* eval(Context* ctx, const std::vector<Expression*>& args){
         DBG_TRACE();
-        if(args.size()!=1){
-                return ctx->nil;
-        }
-        auto expr = args.front()->eval(ctx);
+        auto expr = args.front()->eval(ctx)->eval(ctx);
         auto ast = expr->as<AstNode>();
         if(ast){
                 return ast->expr->eval(ast->_ctx);

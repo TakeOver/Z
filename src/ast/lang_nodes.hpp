@@ -413,10 +413,51 @@ namespace Z{
                         if(iter!=value->end()){
                                 return iter->second;
                         }
+                        iter = value->find(L"get:"+key);
+                        if(iter==value->end()){
+                                iter = value->find(L"$system_getter");
+                                if(iter==value->end()){
+                                        return ctx->nil;
+                                }
+                                auto getter = iter->second;
+                                if(getter->type()==NodeTy::Function){
+                                        return getter->as<Function>()->call(ctx,{this,new String(new std::wstring(key))});
+                                }
+                                if(getter->type()==NodeTy::NativeFunction){
+                                        return getter->as<NativeFunction>()->call(ctx,{this,new String(new std::wstring(key))});
+                                }
+                                if(getter->type()==NodeTy::Macro){
+                                        return getter->as<Macro>()->call(ctx,{this,new String(new std::wstring(key))});
+                                }
+                                return ctx->nil;
+                        }
+                        auto getter = iter->second;
+                        if(getter->type()==NodeTy::Function){
+                                return getter->as<Function>()->call(ctx,{this});
+                        }
+                        if(getter->type()==NodeTy::NativeFunction){
+                                return getter->as<NativeFunction>()->call(ctx,{this});
+                        }
+                        if(getter->type()==NodeTy::Macro){
+                                return getter->as<Macro>()->call(ctx,{this});
+                        }
                         return ctx->nil;
                 }
                 Expression* set(Context* ctx, const std::wstring & key, Expression* value){
-                        (*this->value)[key] = value;
+                        auto iter = this->value->find(L"set:"+key);
+                        if(iter==this->value->end()){
+                                return (*this->value)[key] = value;
+                        }
+                        auto getter = iter->second;
+                        if(getter->type()==NodeTy::Function){
+                                return getter->as<Function>()->call(ctx,{this,value});
+                        }
+                        if(getter->type()==NodeTy::NativeFunction){
+                                return getter->as<NativeFunction>()->call(ctx,{this,value});
+                        }
+                        if(getter->type()==NodeTy::Macro){
+                                return getter->as<Macro>()->call(ctx,{this,value});
+                        }
                         return value;
                 }
                 void MarkChilds(std::set<Collectable*>& marked) override {
@@ -902,7 +943,7 @@ namespace Z{
                                                 _args.push_back(y);
                                         }
                                 }else{
-                                        if ( fun->type() != NodeTy::Macro ) {
+                                        if ( fun->type() == NodeTy::Macro ) {
                                                 _args.push_back( new AstNode(x,ctx) );
                                         } else {
                                                 _args.push_back( x->eval( ctx ) );
@@ -1211,6 +1252,7 @@ namespace Z{
                                 _case(Hash);
                                 _case(Array);
                                 _case(Function);
+                                _case(Macro);
                                 _case(NativeFunction);
                                 case NodeTy::AstNode: return L"Expression";
                                 default: return L"UndefinedExpression";
