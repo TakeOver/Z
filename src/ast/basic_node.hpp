@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <vector>
+#include "../runtime/Collectable.hpp"
 #include "../runtime/Context.hpp"
 namespace Z{
         #define ret_ty void
@@ -39,7 +40,7 @@ namespace Z{
                 ArrayAst,
                 HashAst
         };
-        class Expression {
+        class Expression: public virtual Collectable {
         public:
                 virtual ~Expression(){}
                 virtual ret_ty emit(inp_ty) = 0;
@@ -50,19 +51,34 @@ namespace Z{
         };
         template<typename K> class VecHelper: public virtual Expression{
                 uint64_t _reg = 0;
-                std::vector<K*> container;
+                std::vector<K*> *container; // cannot mutate via ast modifers.
         public:
-                ~VecHelper() override { }
-                VecHelper(const std::vector<K*>& v):container(v){}
+                ~VecHelper() override { 
+                        delete container;
+                }
+                VecHelper(const std::vector<K*>& v):container(new std::vector<K*>(v)){}
+                VecHelper(std::vector<K*>* v):container(v){}
                 virtual ret_ty emit(inp_ty) override {}
                 virtual Expression* eval(Context* ctx){ return ctx->nil; };
                 virtual NodeTy type() override { return NodeTy::VecHelper; }
                 void FullRelease() override {
-                        for(auto&x:container){
+                        for(auto&x:*container){
                                 x->FullRelease();
                         }
                         delete this;
                 }
-                std::vector<K*>& get(){return container;}
+                void MarkChilds(std::set<Collectable*> & marked) override {
+                        if(contains(marked,this)){ 
+                                return;
+                        }
+                        for(auto&x:*container){
+                                if(contains(marked,x)){
+                                        continue;
+                                }
+                                marked.insert(x);
+                                x->MarkChilds(marked);
+                        }
+                }
+                std::vector<K*>& get(){ return *container; }
         };
 }

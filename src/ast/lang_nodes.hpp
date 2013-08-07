@@ -1,7 +1,6 @@
 #pragma once
 #include <iostream>
 #include "basic_node.hpp"
-#include "../runtime/Collectable.hpp"
 #include "../tokenizer/Token.hpp"
 #include <fstream>
 #include <cmath>
@@ -27,6 +26,7 @@ namespace Z{
                         return this;
                 }
                 virtual NodeTy type() override { return NodeTy::Number; }
+                void MarkChilds(std::set<Collectable*>&) override {}
         };
 
         class Variable: public virtual Expression{
@@ -43,21 +43,23 @@ namespace Z{
                 }
                 virtual NodeTy type() override { return NodeTy::Variable; }
                 std::wstring getname(){ return name.str; }
+                void MarkChilds(std::set<Collectable*>&) override {}
         };
 
         class Array: public virtual Expression{
         public:
-                std::vector<Expression*>* value;
+                VecHelper<Expression>* value;
                 ~Array() override { }
                 Array(decltype(value) value):value(value){}
                 virtual ret_ty emit(inp_ty) override {
                         std::wcout << L"[";
-                        for(int i= 0; i<((int)value->size())-1;++i){
-                                (*value)[i]->emit();
+                        auto arr = &value->get();
+                        for(int i= 0; i<((int)arr->size())-1;++i){
+                                (*arr)[i]->emit();
                                 std::wcout << L",";
                         }
-                        if(value->size()){
-                                value->back()->emit();
+                        if(arr->size()){
+                                arr->back()->emit();
                         }
                         std::wcout << L"]";
                 }
@@ -70,25 +72,30 @@ namespace Z{
                         delete this; 
                 }
                 Expression* get(Context* ctx, int64_t key){
-                        if(std::abs(key)>=value->size()){
+                        auto arr = &value->get();
+                        if(std::abs(key)>=arr->size()){
                                 return ctx->nil;
                         }
                         if(key<0){
-                                key = value->size() - key;
+                                key = arr->size() - key;
                         }
-                        return (*value)[key];
+                        return (*arr)[key];
                 }
                 Expression* set(Context* ctx, int64_t key, Expression* _value){
+                        auto arr = &value->get();
                         if(key<0){
-                                key = value->size() - key;
+                                key = arr->size() - key;
                         }
                         if(key<0){
                                 return ctx->nil;
                         }
-                        if((key)>=value->size()){
-                                value->resize(std::abs(key)+1);
+                        if((key)>=arr->size()){
+                                arr->resize(std::abs(key)+1);
                         }
-                        return (*value)[key] = _value;
+                        return (*arr)[key] = _value;
+                }
+                void MarkChilds(std::set<Collectable*>& marked) override {
+                        value->MarkChilds(marked);
                 }
                 virtual NodeTy type() override { return NodeTy::Array; }
         };
@@ -115,6 +122,13 @@ namespace Z{
                         std::wcout << L") -> ";
                         body->emit();
                         std::wcout << L")";
+                }
+
+                void MarkChilds(std::set<Collectable*>& marked) override {
+                        _ctx->MarkChilds(marked);
+                        marked.insert(body);
+                        body->MarkChilds(marked);
+                        args->MarkChilds(marked);
                 }
 
                 virtual Expression* eval(Context*ctx)override{
@@ -144,7 +158,7 @@ namespace Z{
                                         rest->push_back(valargs[it]);
                                 }
                                 __ctx->createVar(varargs.back()->getname());
-                                __ctx->setVar(varargs.back()->getname(),new Array(rest));
+                                __ctx->setVar(varargs.back()->getname(),new Array(new VecHelper<Expression>(rest)));
                         }
                         return body->eval(__ctx);
 
@@ -168,6 +182,7 @@ namespace Z{
                 Expression* call(Context* ctx, const std::vector<Expression*>& args){
                         return func_ptr(ctx,args);
                 }
+                void MarkChilds(std::set<Collectable*>& marked) override {}
         };
 
         class BinOp: public virtual Expression{
@@ -210,6 +225,12 @@ namespace Z{
                         rhs->FullRelease();
                         delete this; 
                 }
+                void MarkChilds(std::set<Collectable*>& marked) override {
+                        marked.insert(lhs);
+                        marked.insert(rhs);
+                        lhs->MarkChilds(marked);
+                        rhs->MarkChilds(marked);
+                }
                 virtual NodeTy type() override { return NodeTy::BinOp; }
         };
 
@@ -246,13 +267,19 @@ namespace Z{
                         lhs->FullRelease(); 
                         delete this; 
                 }
+                void MarkChilds(std::set<Collectable*>& marked) override {
+                        marked.insert(lhs);
+                        lhs->MarkChilds(marked);
+                }
                 virtual NodeTy type() override { return NodeTy::UnOp; }
         };
 
         class String: public virtual Expression{
         public:
                 std::wstring* value;
-                ~String() override { }
+                ~String() override { 
+                        delete value;
+                }
                 String(std::wstring* value):value(value){}
                 virtual ret_ty emit(inp_ty) override {
                         std::wcout << L"\"" << *value << L"\"";
@@ -265,6 +292,7 @@ namespace Z{
                         delete value; 
                         delete this; 
                 }
+                void MarkChilds(std::set<Collectable*>& marked) override {}
                 virtual NodeTy type() override { return NodeTy::String; }
         };
 
@@ -305,6 +333,15 @@ namespace Z{
                         (*this->value)[key] = value;
                         return value;
                 }
+                void MarkChilds(std::set<Collectable*>& marked) override {
+                        for(auto&x:*value){
+                                if(contains(marked,x.second)){
+                                        continue;
+                                }
+                                marked.insert(x.second);
+                                x.second->MarkChilds(marked);
+                        }
+                }
                 virtual NodeTy type() override { return NodeTy::Hash; }
         };
 
@@ -320,6 +357,7 @@ namespace Z{
                         DBG_TRACE();
                         return this;       
                 }
+                void MarkChilds(std::set<Collectable*>& marked) override {}
                 virtual NodeTy type() override { return NodeTy::Boolean; }
         };
 
@@ -334,6 +372,7 @@ namespace Z{
                         DBG_TRACE();
                         return this;       
                 }
+                void MarkChilds(std::set<Collectable*>& marked) override {}
                 virtual NodeTy type() override { return NodeTy::Nil; }
         };
 
@@ -375,6 +414,10 @@ namespace Z{
                         otherwise:
                         return ctx->nil;
                 }
+                void MarkChilds(std::set<Collectable*>& marked) override {
+                        marked.insert(what);
+                        what->MarkChilds(marked);
+                }
                 void FullRelease()override{ 
                         what->FullRelease(); 
                         delete this; 
@@ -394,9 +437,13 @@ namespace Z{
                         DBG_TRACE();
                         auto ell = what->eval(ctx);
                         if(ell->type()!=NodeTy::Array){
-                                return new Array(new std::vector<Expression*>());
+                                return new Array(new VecHelper<Expression>(new std::vector<Expression*>()));
                         }
                         return ell;
+                }
+                void MarkChilds(std::set<Collectable*>& marked) override {
+                        marked.insert(what);
+                        what->MarkChilds(marked);
                 }
                 void FullRelease()override{ 
                         what->FullRelease(); 
@@ -451,6 +498,15 @@ namespace Z{
 
 
                 }
+                void MarkChilds(std::set<Collectable*>& marked) override {
+                        marked.insert(var);
+                        marked.insert(from);
+                        from->MarkChilds(marked);
+                        marked.insert(to);
+                        to->MarkChilds(marked);
+                        marked.insert(body);
+                        body->MarkChilds(marked);
+                }
                 void FullRelease()override{ 
                         body->FullRelease(); 
                         from->FullRelease(); 
@@ -486,6 +542,12 @@ namespace Z{
                         cond->FullRelease();
                         delete this; 
                 }
+                void MarkChilds(std::set<Collectable*>& marked) override {
+                        marked.insert(cond);
+                        cond->MarkChilds(marked);
+                        marked.insert(body);
+                        body->MarkChilds(marked);
+                }
                 virtual NodeTy type() override { return NodeTy::While; }
         };
 
@@ -515,7 +577,10 @@ namespace Z{
                                 (*res)[it] = x->eval(ctx);
                                 ++it;
                         }
-                        return new Array(res);
+                        return new Array(new VecHelper<Expression>(res));
+                }
+                void MarkChilds(std::set<Collectable*>& marked) override {
+                        arr->MarkChilds(marked);
                 }
                 void FullRelease()override{ 
                         arr->FullRelease(); 
@@ -562,6 +627,10 @@ namespace Z{
                         keys->FullRelease();
                         delete this; 
                 }
+                void MarkChilds(std::set<Collectable*>& marked) override {
+                        arr->MarkChilds(marked);
+                        keys->MarkChilds(marked);
+                }
                 virtual NodeTy type() override { return NodeTy::HashAst; }
         };
 
@@ -581,6 +650,7 @@ namespace Z{
                         ctx->setVar(variable.str, val);
                         return val;
                 }
+                void MarkChilds(std::set<Collectable*>& marked) override {}
                 virtual NodeTy type() override { return NodeTy::Export; }
         };
 
@@ -606,6 +676,11 @@ namespace Z{
                         //ctx->addRef();
                         return new Function(ctx,body,args,is_ellipsis);       
                 }
+                void MarkChilds(std::set<Collectable*>& marked) override {
+                        marked.insert(body);
+                        body->MarkChilds(marked);
+                        args->MarkChilds(marked);
+                }
                 virtual NodeTy type() override { return NodeTy::Lambda; }
         };
 
@@ -630,6 +705,12 @@ namespace Z{
                         expr->FullRelease(); 
                         delete this; 
                 }
+                void MarkChilds(std::set<Collectable*>& marked) override {
+                        marked.insert(_ctx);
+                        _ctx->MarkChilds(marked);
+                        marked.insert(expr);
+                        expr->MarkChilds(marked);
+                }
         };
 
         class AstNodeExpr: public virtual Expression{
@@ -651,6 +732,10 @@ namespace Z{
                 virtual void FullRelease() override { 
                         expr->FullRelease(); 
                         delete this; 
+                }
+                void MarkChilds(std::set<Collectable*>& marked) override {
+                        marked.insert(expr);
+                        expr->MarkChilds(marked);
                 }
         };
 
@@ -695,7 +780,7 @@ namespace Z{
                         for(auto&x:args->get()){
                                 if(dynamic_cast<Ellipsis*>(x)!=nullptr){
                                         auto ell = x->eval(ctx);
-                                        for(auto&y:*dynamic_cast<Array*>(ell)->value){
+                                        for(auto&y:dynamic_cast<Array*>(ell)->value->get()){
                                                 _args.push_back(y);
                                         }
                                 }else{
@@ -715,6 +800,11 @@ namespace Z{
                         args->FullRelease(); 
                         func->FullRelease(); 
                         delete this; 
+                }
+                void MarkChilds(std::set<Collectable*>& marked) override {
+                        marked.insert(func);
+                        func->MarkChilds(marked);
+                        args->MarkChilds(marked);
                 }
         };
 
@@ -766,6 +856,7 @@ namespace Z{
                         return mod;
 
                 }
+                void MarkChilds(std::set<Collectable*>& marked) override { }
                 virtual NodeTy type() override { return NodeTy::Import; }
         };
 
@@ -808,6 +899,14 @@ namespace Z{
                                 }
                         }
                         return default_val->eval(ctx);
+                }
+                void MarkChilds(std::set<Collectable*>& marked) override {
+                        marked.insert(what);
+                        what->MarkChilds(marked);
+                        marked.insert(default_val);
+                        default_val->MarkChilds(marked);
+                        cond->MarkChilds(marked);
+                        res->MarkChilds(marked);
                 }
                 void FullRelease()override{ 
                         what->FullRelease();
@@ -854,6 +953,10 @@ namespace Z{
                         cond->FullRelease(); 
                         delete this; 
                 }
+                void MarkChilds(std::set<Collectable*>& marked) override {
+                        cond->MarkChilds(marked);
+                        res->MarkChilds(marked);
+                }
                 virtual NodeTy type() override { return NodeTy::Cond; }
         };
 
@@ -886,6 +989,9 @@ namespace Z{
                         block->FullRelease(); 
                         delete this; 
                 }
+                void MarkChilds(std::set<Collectable*>& marked) override {
+                        block->MarkChilds(marked);
+                }
         };
 
         class Let: public virtual Expression{
@@ -909,6 +1015,10 @@ namespace Z{
                 void FullRelease()override{ 
                         value->FullRelease(); 
                         delete this; 
+                }
+                void MarkChilds(std::set<Collectable*>& marked) override {
+                        marked.insert(value);
+                        value->MarkChilds(marked);
                 }
                 virtual NodeTy type() override { return NodeTy::Let; }
         };
@@ -942,6 +1052,10 @@ namespace Z{
                                 value->FullRelease();
                         } 
                         delete this; 
+                }
+                void MarkChilds(std::set<Collectable*>& marked) override {
+                        marked.insert(value);
+                        value->MarkChilds(marked);
                 }
                 virtual NodeTy type() override { return NodeTy::Var; }
         };

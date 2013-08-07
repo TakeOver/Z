@@ -13,6 +13,9 @@ namespace Z{
                 DBG_TRACE();
                 what->emit();
         }
+        extern void __MarkChilds(std::set<Collectable*> & marked,Expression* expr){
+                expr->MarkChilds(marked);
+        }
 }
 Expression* show(Context* ctx, const std::vector<Expression*>& args){
         DBG_TRACE();
@@ -52,7 +55,7 @@ Expression* len(Z::Context* ctx, const std::vector<Expression*>& args){
         auto obj = args.front()->eval(ctx);
         switch(obj->type()){
                 case NodeTy::String: return new Number(static_cast<double>(dynamic_cast<String*>(obj)->value->length()));
-                case NodeTy::Array: return new Number(static_cast<double>(dynamic_cast<Array*>(obj)->value->size()));
+                case NodeTy::Array: return new Number(static_cast<double>(dynamic_cast<Array*>(obj)->value->get().size()));
                 default: return new Number(0.0);
         }
 }

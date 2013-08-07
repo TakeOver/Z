@@ -6,9 +6,6 @@ namespace Z{
                         ctx->env = new std::unordered_map<std::wstring, Expression*>();                        
                 }
 
-                template<typename K,typename V> bool contains(K&k,V&v){
-                        return k.find(v)!=k.end();
-                } 
         }
 
         Context::Context(Expression* nil){
@@ -18,6 +15,23 @@ namespace Z{
                 builtin_ops =      new std::unordered_map<std::wstring, native_fun_t>();
                 nil              = nullptr;
                 parent           = nullptr;
+        }
+
+        void Context::MarkChilds(std::set<Collectable*>& marked) {
+                if(marked.find(this)!=marked.end()){
+                        return;
+                }
+                for(auto&x:*env){
+                        if(marked.find((Collectable*)x.second)!=marked.end()){
+                            continue;
+                        }
+                        marked.insert((Collectable*)x.second);
+                        extern void __MarkChilds(decltype(marked),Expression*);
+                                __MarkChilds(marked,x.second);
+                }
+                if(parent){
+                        parent->MarkChilds(marked);
+                }
         }
 
         Context::Context(Context * parent){
