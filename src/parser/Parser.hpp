@@ -24,6 +24,7 @@ namespace Z{
                 Cond*           expectCond();
                 String*         expectString(); // +
                 Expression*     expectParen(); // +
+                Expression*     expectMacro(); // +
                 Expression*     expectUnary();  // +
                 Expression*     expectBinary(int64_t prec, Expression*lhs); //+
                 Expression*     expectPrimary(bool =true); // +

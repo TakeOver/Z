@@ -36,6 +36,7 @@ namespace Z{
                 tkn.DefKw(L"...",SubTokTy::Ellipsis,true);
                 tkn.DefKw(L"delete",SubTokTy::Delete,true);
                 tkn.DefKw(L"export",SubTokTy::Export,true);
+                tkn.DefKw(L"macro",SubTokTy::Macro,true);
                 tkn.DefKw(L"match",SubTokTy::Match,true);
                 tkn.DefKw(L"as",SubTokTy::As,true);
                 tkn.DefKw(L"if",SubTokTy::If,true);
@@ -337,6 +338,49 @@ namespace Z{
                 tkn.Next();
                 return new Block(new VecHelper<Expression>(block));
         }
+        Expression* Parser::expectMacro(){
+                std::vector<Variable*> args;
+                Expression* body = nullptr;
+                bool is_ellipsis = false;
+                #define fail do{for(auto&x:args)delete x; if(body)body->FullRelease();}while(0) 
+                #define fail_with(msg,tk) do{fail;setError(L##msg,tk); return nullptr;}while(0)
+                if(tkn.Next().sty!=SubTokTy::LParen){
+                        fail_with("LParen expected in macro definition", tkn.Last());
+                }
+                tkn.Next();
+                while(!tkn.eof() && tkn.Last().sty!=SubTokTy::RParen){
+                        auto var = expectVariable(false)->as<Variable>();
+                        if(!var){
+                                fail;
+                                return nullptr;
+                        }
+                        args.push_back(var);
+                        if(tkn.Last().sty==SubTokTy::Ellipsis){
+                                is_ellipsis = true;
+                                tkn.Next();
+                                break;
+                        }
+                        if(tkn.Last().sty!=SubTokTy::Comma){
+                                break;
+                        }
+                        tkn.Next();
+                }
+                if(tkn.Last().sty!=SubTokTy::RParen){
+                        fail_with("RParen expected at end of macro args definition", tkn.Last());
+                }
+                if(tkn.Next().sty!=SubTokTy::Arrow){
+                        fail_with("Arrow expected at macro definition", tkn.Last());
+                }
+                tkn.Next();
+                body = expectExpression();
+                if(!body){
+                        fail;
+                        return nullptr;
+                }
+                return new MacroAst(body, new VecHelper<Variable>(args),is_ellipsis);
+                #undef fail
+                #undef fail_with
+        }
         Expression* Parser::expectFor(){
                 tkn.Next();
                 auto var = expectVariable(false);
@@ -392,6 +436,7 @@ namespace Z{
                                         case SubTokTy::Cond: return expectCond();
                                         case SubTokTy::HashKey: return expectHash();
                                         case SubTokTy::LSqParen: return expectArray();
+                                        case SubTokTy::Macro: return expectMacro();
                                         case SubTokTy::Dollar: {
                                                 auto tok = tkn.Next();
                                                 if ( is_op(tok.str) ) {

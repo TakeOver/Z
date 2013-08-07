@@ -2,7 +2,6 @@
 #include <iostream>
 namespace Z{
         namespace {
-                using tk = Tokenizer;
                 inline bool is_num0     (wchar_t c){ return (c>=L'0' && c<=L'9'); }
                 inline bool is_num1     (wchar_t c){ return is_num0(c) || (c == '.'); }
                 inline bool is_letter0  (wchar_t c){ return (c==L'_') || (c==L'`') || (c>=L'a' && c<=L'z') || (c>=L'A' && c<=L'Z') || (c>=L'а' && c<=L'я') || (c>=L'А' && c<=L'Я'); }
@@ -20,19 +19,19 @@ namespace Z{
                 template<typename K, typename V> bool contains(const K &k, const V & v){ return k.find(v)!=k.end(); }
         }
 
-        tk::Tokenizer(const std::wstring & code):code(code){}
-        tk::~Tokenizer(){}
-        bool tk::eof()const { return _eof(); }
-        Token& tk::Last()const{
+        Tokenizer::Tokenizer(const std::wstring & code):code(code){}
+        Tokenizer::~Tokenizer(){}
+        bool Tokenizer::eof()const { return _eof(); }
+        Token& Tokenizer::Last()const{
                 if(cache_pos){
                         return cache[cache_pos-1];
                 }
                 return __tokNone;
         }
-        void tk::DefKw(const std::wstring& str,SubTokTy ty, bool op)const{
+        void Tokenizer::DefKw(const std::wstring& str,SubTokTy ty, bool op)const{
                 _defkw(str, ty,op);
         }
-        Token& tk::Next() const {
+        Token& Tokenizer::Next() const {
                 if(eof())return __tokNone;
                 if(cache_pos<cache.size()){
                         return cache[cache_pos++];
@@ -51,7 +50,7 @@ namespace Z{
                 ++cache_pos;
                 return cache.back();
         }
-        Token& tk::Look(uint64_t num) const {
+        Token& Tokenizer::Look(uint64_t num) const {
                 for (int i = 0; i < num; ++i){
                         Next();
                 }
@@ -59,13 +58,13 @@ namespace Z{
                 cache_pos-=num;
                 return res;
         }
-        void tk::RetTokens(uint64_t num) const {
+        void Tokenizer::RetTokens(uint64_t num) const {
                 if(num>cache_pos){/*error*/}
                 else cache_pos -= num;
         }
-        bool tk::_eof() const { return this->position >= this->code.size(); }
+        bool Tokenizer::_eof() const { return this->position >= this->code.size(); }
 
-        void tk::_trim() const {
+        void Tokenizer::_trim() const {
                 if(_eof()){
                         return;
                 }
@@ -90,19 +89,19 @@ namespace Z{
                 }
         }
 
-        wchar_t tk::_nextChar() const {
+        wchar_t Tokenizer::_nextChar() const {
                 if(_eof() || position+1 == code.size()){
                         return 0;
                 }
                 return code[++position];
         }
-        wchar_t tk::_curChar() const {
+        wchar_t Tokenizer::_curChar() const {
                 if(_eof()){
                         return 0;
                 }
                 return code[position];
         }
-        void tk::reset() const {
+        void Tokenizer::reset() const {
                 this->errMsg = L"";
                 this->failed = false;
                 this->lineno = 0;
@@ -111,10 +110,10 @@ namespace Z{
                 this->cache_pos = 0;
                 this->code.clear();
         }
-        void tk::setCode(const std::wstring& code) const {
+        void Tokenizer::setCode(const std::wstring& code) const {
                 this->code = code;
         } 
-        Token tk::_next() const {
+        Token Tokenizer::_next() const {
                 _trim();
                 if(_eof()){
                         return Token(TokTy::None,L"",lineno,position);
@@ -136,7 +135,7 @@ namespace Z{
                 return Token(TokTy::None,L"$error",l,p);
 
         }
-        std::wstring tk::_num() const {
+        std::wstring Tokenizer::_num() const {
                 std::wstring res; res = _curChar();
                 wchar_t c;
                 while((c=_nextChar()) && (is_num1(c)))res+=c;
@@ -145,7 +144,7 @@ namespace Z{
                 }
                 return res;
         }
-        std::wstring tk::_id() const {
+        std::wstring Tokenizer::_id() const {
                 std::wstring res; res = _curChar();
                 wchar_t c;
                 while((c=_nextChar()) && (is_letter1(c)))res+=c;
@@ -155,7 +154,7 @@ namespace Z{
                 }
                 return res;
         }
-        std::wstring tk::_str() const {
+        std::wstring Tokenizer::_str() const {
                 std::wstring res; 
                 wchar_t end = _curChar(); 
                 wchar_t c;
@@ -181,11 +180,11 @@ namespace Z{
                 _nextChar(); // eat \'
                 return res;
         }
-        void tk::setError(const std::wstring& msg) const {
+        void Tokenizer::setError(const std::wstring& msg) const {
                 errMsg = msg + L" on line:" + std::to_wstring(lineno) + L" position:"+std::to_wstring(position);
                 failed = true; 
         }
-        std::wstring tk::_op() const {
+        std::wstring Tokenizer::_op() const {
                 std::wstring tmp; tmp = _curChar();
                 auto _pos = position;
                 wchar_t c;
@@ -203,7 +202,7 @@ namespace Z{
                 return tmp.substr(0,1);
 
         }
-        void tk::_defkw(const std::wstring& str,SubTokTy ty, bool op) const {
+        void Tokenizer::_defkw(const std::wstring& str,SubTokTy ty, bool op) const {
                 if(op){
                         ops.insert(str);
                 }

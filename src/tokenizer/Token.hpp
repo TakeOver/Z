@@ -30,6 +30,7 @@ namespace Z{
                 Use,
                 Placeholder,
                 Import,
+                Macro,
                 Var,
                 Let,
                 Def,

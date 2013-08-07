@@ -176,6 +176,67 @@ namespace Z{
                 virtual NodeTy type() override { return NodeTy::Function; }
         };
 
+        class Macro: public virtual Expression{
+        public:
+                Context* _ctx;
+                Expression* body;
+                VecHelper<Variable>* args;
+                bool is_ellipsis;
+                ~Macro() override { }
+                Macro(Context* _ctx,Expression * body, VecHelper<Variable> *args, bool is_ellipsis=false):_ctx(_ctx),body(body),args(args),
+                        is_ellipsis(is_ellipsis){}
+                virtual ret_ty emit(inp_ty) override {
+                        std::wcout << L"(macro(";
+                        for(int i=0;i<((int)args->get().size())-1;++i){
+                                args->get()[i]->emit();
+                                std::wcout << L",";
+                        }
+                        if(args->get().size()){
+                                args->get().back()->emit();
+                        }
+                        if(is_ellipsis)std::wcout << L"...";
+                        std::wcout << L") -> ";
+                        body->emit();
+                        std::wcout << L")";
+                }
+
+                void MarkChilds(std::set<Collectable*>& marked) override {
+                        marked.insert(this);
+                        _ctx->MarkChilds(marked);
+                        body->MarkChilds(marked);
+                        args->MarkChilds(marked);
+                }
+
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
+                        return this;       
+                }
+                Expression* call(Context* ctx,std::vector<Expression*> valargs){
+                        auto __ctx = new Context(_ctx);
+                        auto &varargs = args->get();
+                        uint it = 0, lim = varargs.size() - is_ellipsis;
+                        for(;it<lim;++it){
+                                __ctx->createVar(varargs[it]->getname());
+                                if(it<valargs.size()){
+                                        __ctx->setVar(varargs[it]->getname(),valargs[it]);
+                                }else{
+                                        __ctx->setVar(varargs[it]->getname(),ctx->nil);
+                                }
+                        }
+                        if(is_ellipsis){
+                                std::vector<Expression*> *rest = new std::vector<Expression*>();
+                                for(;it<valargs.size();++it){
+                                        rest->push_back(valargs[it]);
+                                }
+                                __ctx->createVar(varargs.back()->getname());
+                                __ctx->setVar(varargs.back()->getname(),new Array(new VecHelper<Expression>(rest)));
+                        }
+                        return body->eval(__ctx);
+
+                }
+                virtual NodeTy type() override { return NodeTy::Macro; }
+        };
+
         class NativeFunction: public virtual Expression {
         public:
                 native_fun_t func_ptr;
@@ -229,6 +290,10 @@ namespace Z{
                         if(fun->type() == NodeTy::Function){
                                 return fun->as<Function>()->call(ctx,{lhs->eval(ctx),rhs->eval(ctx)},false);
                         }
+                        if(fun->type() == NodeTy::Macro){
+                                return fun->as<Macro>()->call(ctx,{lhs,rhs});
+                        }
+
                         return ctx->nil;
 
                 }
@@ -271,6 +336,9 @@ namespace Z{
                         }
                         if(fun->type()==NodeTy::Function){
                                 return fun->as<Function>()->call(ctx,{lhs});
+                        }
+                        if(fun->type() == NodeTy::Macro){
+                                return fun->as<Macro>()->call(ctx,{lhs});
                         }
                         return ctx->nil;
                 }
@@ -705,6 +773,35 @@ namespace Z{
                 }
                 virtual NodeTy type() override { return NodeTy::Lambda; }
         };
+        class MacroAst: public virtual Expression{
+                Expression* body;
+                VecHelper<Variable>* args;
+                bool is_ellipsis;
+        public:
+                ~MacroAst() override { }
+                MacroAst(Expression * body, VecHelper<Variable> *args, bool is_ellipsis=false):body(body),args(args),
+                        is_ellipsis(is_ellipsis){}
+                virtual ret_ty emit(inp_ty) override {
+                        Function(nullptr,body,args,is_ellipsis).emit();
+                }
+
+                void FullRelease()override{ 
+                        args->FullRelease(); 
+                        body->FullRelease();
+                        delete this; 
+                }
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
+                        //ctx->addRef();
+                        return new Macro(ctx,body,args,is_ellipsis);       
+                }
+                void MarkChilds(std::set<Collectable*>& marked) override {
+                        marked.insert(this);
+                        body->MarkChilds(marked);
+                        args->MarkChilds(marked);
+                }
+                virtual NodeTy type() override { return NodeTy::MacroAst; }
+        };
 
         
         class AstNode: public virtual Expression{
@@ -805,7 +902,11 @@ namespace Z{
                                                 _args.push_back(y);
                                         }
                                 }else{
-                                        _args.push_back(x->eval(ctx));
+                                        if ( fun->type() == NodeTy::Macro ) {
+                                                _args.push_back( new AstNode(x,ctx) );
+                                        } else {
+                                                _args.push_back( x->eval( ctx ) );
+                                        }
                                 }
                         }
                         if(fun->type() == NodeTy::NativeFunction){
@@ -813,6 +914,9 @@ namespace Z{
                         }
                         if(fun->type()==NodeTy::Function){
                                 return fun->as<Function>()->call(ctx, _args,false);
+                        }       
+                        if(fun->type()==NodeTy::Macro){
+                                return fun->as<Macro>()->call(ctx, _args);
                         }       
                         return ctx->nil;
                 }

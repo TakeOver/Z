@@ -37,6 +37,8 @@ namespace Z{
                 For,
                 Ellipsis,
                 AstNode,
+                Macro,
+                MacroAst,
                 ArrayAst,
                 HashAst
         };
