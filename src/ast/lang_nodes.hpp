@@ -1,6 +1,7 @@
 #pragma once
 #include <iostream>
 #include "basic_node.hpp"
+#include "../runtime/Collectable.hpp"
 #include "../tokenizer/Token.hpp"
 #include <fstream>
 #include <cmath>
@@ -85,7 +86,7 @@ namespace Z{
                                 return ctx->nil;
                         }
                         if((key)>=value->size()){
-                                value->resize(std::abs(key));
+                                value->resize(std::abs(key)+1);
                         }
                         return (*value)[key] = _value;
                 }
@@ -796,6 +797,7 @@ namespace Z{
                         DBG_TRACE();
                         auto pattern = what->eval(ctx);
                         auto equal = ctx->findBuiltinOp(L"binary@==");
+                        DBG_TRACE("builtin(match|equal):%li",(intptr_t)equal);
                         if(!equal){
                                 return ctx->nil;
                         }
@@ -901,6 +903,7 @@ namespace Z{
                         ctx->createVar(name.str);
                         Expression* val;
                         ctx->setVar(name.str,val = value->eval(ctx));
+                        ctx->setImmutableState(name.str);
                         return val;
                 }
                 void FullRelease()override{ 

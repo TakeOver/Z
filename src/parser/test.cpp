@@ -3,15 +3,16 @@
 #include "../debug.hpp"
 using namespace Z;
 namespace Z{
-Expression* Parse(const std::wstring& s){
-        DBG_TRACE();
-        auto res = Parser(s).Parse();
-        return res;
-}
-extern void print(Expression*what){
-        DBG_TRACE();
-        what->emit();
-}
+        Expression* __alloc_native_function(native_fun_t ptr){ return new NativeFunction(ptr); }
+        Expression* Parse(const std::wstring& s){
+                DBG_TRACE();
+                auto res = Parser(s).Parse();
+                return res;
+        }
+        extern void print(Expression*what){
+                DBG_TRACE();
+                what->emit();
+        }
 }
 Expression* show(Context* ctx, const std::vector<Expression*>& args){
         DBG_TRACE();
@@ -57,9 +58,12 @@ Expression* len(Z::Context* ctx, const std::vector<Expression*>& args){
 }
 Expression* append(Z::Context* ctx, const std::vector<Expression*>& args){
         DBG_TRACE();
+        if(args.size()==0){
+            return ctx->nil;
+        }
         auto self = dynamic_cast<AstNode*>(args.front()->eval(ctx));
         if(!self){
-            return ctx->nil;
+                return ctx->nil;
         }
         if(self->expr->type()==NodeTy::HashAst){
                 if(args.size()<3){
@@ -275,7 +279,8 @@ Expression* _current(Z::Context* ctx, const std::vector<Expression*>&args){
 }
 
 int main(){
-        Context* ctx = new Context(new Nil());
+        Context* ctx,*evalctx = new Context(ctx=new Context(new Nil()));
+        //nested contextext is needed for holding global variables(aka exported modules variables)
         ctx->defBuiltinOp(L"binary@+",add);
         ctx->defBuiltinOp(L"binary@-",sub);
         ctx->defBuiltinOp(L"binary@/",div);
@@ -307,14 +312,13 @@ int main(){
         ctx->setVar(L"parse!",new NativeFunction(parse));
         ctx->createVar(L"Native");
         ctx->setVar(L"Native",new Hash(new std::unordered_map<std::wstring, Expression*>({
-        {L"ast",new Hash(new std::unordered_map<std::wstring, Expression*>({
-                        {L"append",new NativeFunction(append)}}))
-        },      {L"str",new Hash(new std::unordered_map<std::wstring,Expression*>({
+                {L"ast",new Hash(new std::unordered_map<std::wstring, Expression*>({
+                        {L"append",new NativeFunction(append)}}))},
+                {L"str",new Hash(new std::unordered_map<std::wstring,Expression*>({
                         {L"len",new NativeFunction(len)}}))},
                 {L"Env",new Hash(new std::unordered_map<std::wstring, Expression*>({
                         {L"createVar",new NativeFunction(_createVar)},
-                        {L"current",new NativeFunction(_current)}
-                }))}})));
+                        {L"current",new NativeFunction(_current)}}))}})));
         Parser par(L"import object;");
         std::vector<Z::Expression*> image; 
         image.push_back(par.Parse());
@@ -340,7 +344,7 @@ int main(){
                 }else{
                         image.push_back(expr);
                         std::wcout << L">>>>\t";
-                        Z::print(expr->eval(ctx));
+                        Z::print(expr->eval(evalctx));
                         std::wcout << L"\n>>";
                 }
         }

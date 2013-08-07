@@ -1,12 +1,12 @@
 #include "Parser.hpp"
 #include "../debug.hpp"
 namespace Z{
-        namespace {using p = Parser;}
-        p::Parser(const std::wstring & code):tkn(code){_initTokenizer(); tkn.Next();}
-        p::~Parser(){}
-        void p::_initTokenizer(){
+        Parser::Parser(const std::wstring & code):tkn(code){_initTokenizer(); tkn.Next();}
+        Parser::~Parser(){}
+        void Parser::_initTokenizer(){
                 #define tok(ty) Token(TokTy::None,L## #ty,0,0,ty)
                 tkn.DefKw(L"${",SubTokTy::Quasi,true);
+                tkn.DefKw(L"$",SubTokTy::Dollar,true);
                 tkn.DefKw(L"#{",SubTokTy::HashKey,true);
                 defop(L"+",120);
                 defop(L"-",120);
@@ -66,36 +66,36 @@ namespace Z{
                 op_precedence[L"unary$+"] = 150;              
                 op_precedence[L"unary$!"] = 150;
         }
-        Parser& p::reset(){
+        Parser& Parser::reset(){
                 failed = false;
                 errMsg = L"";
                 tkn.reset();
                 return *this;
         }
-        void p::setCode(const std::wstring& code){
+        void Parser::setCode(const std::wstring& code){
                 tkn.setCode(code);
                 tkn.Next();
         }
-        void p::defop(const std::wstring& str, int64_t prec, SubTokTy sty, Token follows){
+        void Parser::defop(const std::wstring& str, int64_t prec, SubTokTy sty, Token follows){
                 tkn.DefKw(str, sty,true);
                 op_precedence[str] = prec;
                 if(follows.sty!=SubTokTy::None){
                         follows_oper[sty] = follows;
                 }
         }
-        String* p::expectString(){
+        String* Parser::expectString(){
                 DBG_TRACE();
                 auto res = new String(new std::wstring(tkn.Last().str));
                 tkn.Next();
                 return res;
         }
-        Number* p::expectNumber(){
+        Number* Parser::expectNumber(){
                 DBG_TRACE();
                 auto res = new Number(std::wcstod(tkn.Last().str.c_str(),nullptr));
                 tkn.Next();
                 return res;
         }
-        Expression* p::expectImport(){
+        Expression* Parser::expectImport(){
                 auto module = tkn.Next();
                 tkn.Next();
                 if(module.ty!=TokTy::Identifer){
@@ -113,7 +113,7 @@ namespace Z{
                 }
                 return new Import(module);
         }
-        Expression* p::expectExpression(){
+        Expression* Parser::expectExpression(){
                 DBG_TRACE();
                 auto lhs = expectPrimary();
                 if(!lhs){
@@ -121,7 +121,7 @@ namespace Z{
                 }
                 return expectBinary(0,lhs);
         }
-        Expression* p::expectUnary(){
+        Expression* Parser::expectUnary(){
                 DBG_TRACE();
                 auto op = tkn.Last();
                 int64_t prec;
@@ -140,7 +140,7 @@ namespace Z{
                 }
                 return new UnOp(op.str,lhs);
         }
-        Expression* p::expectBinary(int64_t prec, Expression* lhs){
+        Expression* Parser::expectBinary(int64_t prec, Expression* lhs){
                 DBG_TRACE();
                 if(is_right_assoc.find(tkn.Last().str)!=is_right_assoc.end()){
                         auto op = tkn.Last();
@@ -229,7 +229,7 @@ namespace Z{
                         }
                 }
         }
-        Expression* p::expectVariable(bool lambda_possible){
+        Expression* Parser::expectVariable(bool lambda_possible){
                 DBG_TRACE();
                 auto res = new Variable(tkn.Last());
                 if(tkn.Next().sty == SubTokTy::Arrow && lambda_possible){
@@ -244,7 +244,7 @@ namespace Z{
                 }
                 return res;
         }
-        Expression* p::expectArray(){
+        Expression* Parser::expectArray(){
                 tkn.Next();
                 std::vector<Expression*> vec;
                 while(!tkn.eof() && tkn.Last().sty!=SubTokTy::RSqParen){
@@ -269,7 +269,7 @@ namespace Z{
                 tkn.Next();
                 return new ArrayAst(new VecHelper<Expression>(vec));
         }
-        Expression* p::expectHash(){
+        Expression* Parser::expectHash(){
                 tkn.Next();
                 std::vector<Expression*> keys;
                 std::vector<Expression*> vals;
@@ -315,7 +315,7 @@ namespace Z{
                 tkn.Next();
                 return new HashAst(new VecHelper<Expression>(vals),new VecHelper<Expression>(keys));
         }
-        Expression* p::expectBlock(){
+        Expression* Parser::expectBlock(){
                 tkn.Next();
                 std::vector<Expression*> block;
                 while(tkn.Last().sty!=SubTokTy::RBlock && !tkn.eof()){
@@ -337,7 +337,7 @@ namespace Z{
                 tkn.Next();
                 return new Block(new VecHelper<Expression>(block));
         }
-        Expression* p::expectFor(){
+        Expression* Parser::expectFor(){
                 tkn.Next();
                 auto var = expectVariable(false);
                 if(!var){
@@ -376,7 +376,7 @@ namespace Z{
                 }
                 return new For(dynamic_cast<Variable*>(var),from,to,body);
         }
-        Expression* p::expectPrimary(bool lambda_possible){
+        Expression* Parser::expectPrimary(bool lambda_possible){
                 DBG_TRACE();
                 auto tok = tkn.Last();
                 auto ty = tok.ty;
@@ -392,6 +392,17 @@ namespace Z{
                                         case SubTokTy::Cond: return expectCond();
                                         case SubTokTy::HashKey: return expectHash();
                                         case SubTokTy::LSqParen: return expectArray();
+                                        case SubTokTy::Dollar: {
+                                                auto tok = tkn.Next();
+                                                if ( is_op(tok.str) ) {
+                                                        tok.str = L"b@" + tok.str;
+                                                        tkn.Next();
+                                                        return new Variable(tok);
+                                                }
+
+                                                setError(L"Not implemented($ - Dollar)",tok);
+                                                return nullptr;
+                                        }
                                         case SubTokTy::While:{
                                                 tkn.Next();
                                                 auto cond = expectExpression();
@@ -504,7 +515,7 @@ namespace Z{
                         default: setError(L"Primary expected[1]",tok); return nullptr;
                 }
         }
-        Expression* p::expectLet(){
+        Expression* Parser::expectLet(){
                 auto name = tkn.Next();
                 if(name.ty!=TokTy::Identifer){
                         setError(L"Identifer expected in let",name);
@@ -521,7 +532,7 @@ namespace Z{
                 }
                 return new Let(name,value);
         }
-        Expression* p::expectVar(){
+        Expression* Parser::expectVar(){
                 auto name = tkn.Next();
                 if(name.ty!=TokTy::Identifer){
                         setError(L"Identifer expected in var",name);
@@ -537,7 +548,7 @@ namespace Z{
                 }
                 return new Var(name,value);
         }
-        Expression* p::expectParen(){
+        Expression* Parser::expectParen(){
                 DBG_TRACE();
                 if(tkn.Next().sty == SubTokTy::RParen){
                         //lambda without arguments
@@ -659,25 +670,25 @@ namespace Z{
                 }
                 return res; // simple (expr)
         }
-        int64_t p::op_prec(const std::wstring& str){
+        int64_t Parser::op_prec(const std::wstring& str){
                 if(op_precedence.find(str)==op_precedence.end()){
                         return -1;
                 }
                 auto prec = op_precedence[str];
                 return prec?prec:-1;
         }
-        bool p::is_op(const std::wstring& str){ return op_prec(str)!=-1; }
+        bool Parser::is_op(const std::wstring& str){ return op_prec(str)!=-1; }
 
-        bool p::isSuccess(){ return !failed; }
-        std::wstring p::ErrorMsg(){ if(isSuccess())return L"Ok!"; else return errMsg; }
+        bool Parser::isSuccess(){ return !failed; }
+        std::wstring Parser::ErrorMsg(){ if(isSuccess())return L"Ok!"; else return errMsg; }
 
-        Expression* p::Parse(){return expectExpression();}
+        Expression* Parser::Parse() { return expectExpression(); }
 
-        void p::setError(const std::wstring& msg, const Token& info){
+        void Parser::setError(const std::wstring& msg, const Token& info){
                 errMsg = msg + L"[found:\'" + info.str + L"\'[ty:" + std::to_wstring((int)info.ty) + L"|sty:" + std::to_wstring((int)info.sty) + L"]] on line:" + std::to_wstring(info.line) + L" pos:" + std::to_wstring(info.pos);
                 failed = true; 
         }
-        Match* p::expectMatch(){
+        Match* Parser::expectMatch(){
                 tkn.Next();
                 auto expr = expectExpression();
                 if(!expr){
@@ -752,7 +763,7 @@ namespace Z{
 
 
         }
-        Cond* p::expectCond(){
+        Cond* Parser::expectCond(){
                 tkn.Next();
                 if(tkn.Last().sty!=SubTokTy::LBlock){
                         setError(L"{ expected in cond expr",tkn.Last());

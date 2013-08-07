@@ -3,6 +3,7 @@
 #include <iostream>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 namespace Z{
         class Expression;
         class Context;
@@ -13,7 +14,9 @@ namespace Z{
                 Context * parent;
                 std::unordered_map<std::wstring, Expression*> *imported_modules;
                 std::unordered_map<std::wstring,native_fun_t> * builtin_ops;
+                std::unordered_set<std::wstring> immutable;
         public:
+                void setImmutableState(const std::wstring&);
                 std::unordered_map<std::wstring, Expression*> *env;
                 Expression* nil;
                 Context(Context * parent);
