@@ -902,7 +902,7 @@ namespace Z{
                                                 _args.push_back(y);
                                         }
                                 }else{
-                                        if ( fun->type() == NodeTy::Macro ) {
+                                        if ( fun->type() != NodeTy::Macro ) {
                                                 _args.push_back( new AstNode(x,ctx) );
                                         } else {
                                                 _args.push_back( x->eval( ctx ) );
@@ -1184,7 +1184,9 @@ namespace Z{
                 }
                 void MarkChilds(std::set<Collectable*>& marked) override {
                         marked.insert(this);
-                        value->MarkChilds(marked);
+                        if(value){
+                                value->MarkChilds(marked);
+                        }
                 }
                 virtual NodeTy type() override { return NodeTy::Var; }
         };
