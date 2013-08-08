@@ -241,7 +241,7 @@ namespace Z{
                                 delete res;
                                 return nullptr;
                         }
-                        return new Lambda(body,new VecHelper<Variable>({res}));
+                        return new Lambda(body,new VecHelper<Expression>({res}));
                 }
                 return res;
         }
@@ -339,7 +339,7 @@ namespace Z{
                 return new Block(new VecHelper<Expression>(block));
         }
         Expression* Parser::expectMacro(){
-                std::vector<Variable*> args;
+                std::vector<Expression*> args;
                 Expression* body = nullptr;
                 bool is_ellipsis = false;
                 #define fail do{for(auto&x:args)delete x; if(body)body->FullRelease();}while(0) 
@@ -377,7 +377,7 @@ namespace Z{
                         fail;
                         return nullptr;
                 }
-                return new MacroAst(body, new VecHelper<Variable>(args),is_ellipsis);
+                return new MacroAst(body, new VecHelper<Expression>(args),is_ellipsis);
                 #undef fail
                 #undef fail_with
         }
@@ -606,7 +606,7 @@ namespace Z{
                         if(!body){
                                 return nullptr;
                         }
-                        return new Lambda(body,new VecHelper<Variable>(new std::vector<Variable*>()));
+                        return new Lambda(body,new VecHelper<Expression>(new std::vector<Expression*>()));
 
                 }
                 bool is_ell = false;
@@ -658,7 +658,7 @@ namespace Z{
                                                 }
                                                 return nullptr;
                                         }
-                                        std::vector<Variable*> varvec;
+                                        std::vector<Expression*> varvec;
                                         for(auto&x:vec){
                                                 if(x->type()!=NodeTy::Variable){
                                                         for(auto&x:vec){
@@ -669,7 +669,7 @@ namespace Z{
                                                 }
                                                 varvec.push_back(dynamic_cast<Variable*>(x));
                                         }
-                                        return new Lambda((body),new VecHelper<Variable>(varvec),is_ell);
+                                        return new Lambda((body),new VecHelper<Expression>(varvec),is_ell);
                                 }
                                 setError(L"Arrow expected", tkn.Last());
                                 for(auto&x:vec)x->FullRelease();
@@ -691,7 +691,7 @@ namespace Z{
                                         res->FullRelease();
                                         return nullptr;
                                 }
-                                return new Lambda(body,new VecHelper<Variable>({dynamic_cast<Variable*>(res)}),true);
+                                return new Lambda(body,new VecHelper<Expression>({res}),true);
                         }
                         setError(L"RParen expected[1]", tkn.Last());
                         res->FullRelease();
@@ -703,15 +703,15 @@ namespace Z{
                                 setError(L"Variable expected in lambda",tkn.Last());
                                 return nullptr;
                         }
-                        std::vector<Variable*> varvec;
-                        varvec.push_back(dynamic_cast<Variable*>(res));
+                        std::vector<Expression*> varvec;
+                        varvec.push_back(res);
                         tkn.Next();
                         auto body = expectExpression();
                         if(!body){
                                 res->FullRelease();
                                 return nullptr;
                         }
-                        return new Lambda((body),new VecHelper<Variable>(varvec));
+                        return new Lambda((body),new VecHelper<Expression>(varvec));
                 }
                 return res; // simple (expr)
         }

@@ -67,7 +67,8 @@ let Expression = #{
         new = self-> ${{}},
         create = self -> ${{}},
         append = Native.ast.append,
-        getchild = Native.ast.getchild
+        getchild = Native.ast.getchild,
+        toArray = Native.ast.toArray
 }
 let Array = #{
         base = Object.create(),

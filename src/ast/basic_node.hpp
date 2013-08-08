@@ -35,6 +35,7 @@ namespace Z{
                 Hash,
                 While,
                 For,
+                ContextExpr,
                 Ellipsis,
                 AstNode,
                 Macro,
@@ -49,6 +50,8 @@ namespace Z{
                 virtual Expression* eval(Context*) = 0;
                 virtual NodeTy type() = 0; 
                 virtual void FullRelease() { delete this; }
+                virtual Expression* toArray(Context* ctx) { return ctx->nil; }
+                virtual Expression* toHash(Context* ctx) { return ctx->nil; }
                 template<typename T> T* as(){ return dynamic_cast<T*>(this); }
         };
         template<typename K> class VecHelper: public virtual Expression{

@@ -11,6 +11,7 @@ namespace Z{
         namespace { 
                 bool to_bool(Expression*);
                 std::wstring typeof_str(NodeTy); 
+                Expression* __newContextExpr(Context*);
         }
 
         class Number: public virtual Expression{
@@ -28,6 +29,7 @@ namespace Z{
                 virtual NodeTy type() override { return NodeTy::Number; }
                 void MarkChilds(std::set<Collectable*>&) override {}
         };
+
 
         class Variable: public virtual Expression{
         public:
@@ -90,6 +92,9 @@ namespace Z{
                         }
                         return (*arr)[key];
                 }
+
+                Expression* toArray(Context* ctx) override { return this; }
+                
                 Expression* set(Context* ctx, int64_t key, Expression* _value){
                         auto arr = &value->get();
                         if(key<0){
@@ -110,14 +115,32 @@ namespace Z{
                 virtual NodeTy type() override { return NodeTy::Array; }
         };
 
+        class Boolean: public virtual Expression{
+        public:
+                bool value;
+                ~Boolean() override { }
+                Boolean(bool value):value(value){}
+                virtual ret_ty emit(inp_ty) override {
+                        std::wcout << (value?L"true":L"false");
+                }
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
+                        return this;       
+                }
+                void MarkChilds(std::set<Collectable*>& marked) override {
+                        marked.insert(this);
+                }
+                virtual NodeTy type() override { return NodeTy::Boolean; }
+        };
+
         class Function: public virtual Expression{
         public:
                 Context* _ctx;
                 Expression* body;
-                VecHelper<Variable>* args;
+                VecHelper<Expression>* args;
                 bool is_ellipsis;
                 ~Function() override { }
-                Function(Context* _ctx,Expression * body, VecHelper<Variable> *args, bool is_ellipsis=false):_ctx(_ctx),body(body),args(args),
+                Function(Context* _ctx,Expression * body, VecHelper<Expression> *args, bool is_ellipsis = false):_ctx(_ctx),body(body),args(args),
                         is_ellipsis(is_ellipsis){}
                 virtual ret_ty emit(inp_ty) override {
                         std::wcout << L"((";
@@ -133,6 +156,12 @@ namespace Z{
                         body->emit();
                         std::wcout << L")";
                 }
+                Expression* toArray(Context* ctx) override { 
+                        return new Array(
+                                new VecHelper<Expression>(
+                                        {__newContextExpr(_ctx),
+                                        new Array(args),body,
+                                        new Boolean(is_ellipsis)})); }
 
                 void MarkChilds(std::set<Collectable*>& marked) override {
                         marked.insert(this);
@@ -151,9 +180,16 @@ namespace Z{
                                         x = x->eval(ctx);
                                 }
                         }
+                        std::vector<Variable*> varargs;
                         auto __ctx = new Context(_ctx);
-                        auto &varargs = args->get();
-                        uint it = 0, lim = varargs.size() - is_ellipsis;
+                        for(auto&x:args->get()){
+                                if(x->type()!=NodeTy::Variable){
+                                        std::wcout << L"Variable expected in function in args[runtime error]\n";
+                                        return ctx->nil;
+                                }
+                                varargs.push_back(x->as<Variable>());
+                        }
+                        uint it = 0, lim = args->get().size() - is_ellipsis;
                         for(;it<lim;++it){
                                 __ctx->createVar(varargs[it]->getname());
                                 if(it<valargs.size()){
@@ -167,8 +203,8 @@ namespace Z{
                                 for(;it<valargs.size();++it){
                                         rest->push_back(valargs[it]);
                                 }
-                                __ctx->createVar(varargs.back()->getname());
-                                __ctx->setVar(varargs.back()->getname(),new Array(new VecHelper<Expression>(rest)));
+                                __ctx->createVar(varargs[args->get().size()-1]->getname());
+                                __ctx->setVar(varargs[args->get().size()-1]->getname(),new Array(new VecHelper<Expression>(rest)));
                         }
                         return body->eval(__ctx);
 
@@ -180,10 +216,10 @@ namespace Z{
         public:
                 Context* _ctx;
                 Expression* body;
-                VecHelper<Variable>* args;
+                VecHelper<Expression>* args;
                 bool is_ellipsis;
                 ~Macro() override { }
-                Macro(Context* _ctx,Expression * body, VecHelper<Variable> *args, bool is_ellipsis=false):_ctx(_ctx),body(body),args(args),
+                Macro(Context* _ctx,Expression * body, VecHelper<Expression> *args, bool is_ellipsis=false):_ctx(_ctx),body(body),args(args),
                         is_ellipsis(is_ellipsis){}
                 virtual ret_ty emit(inp_ty) override {
                         std::wcout << L"(macro(";
@@ -200,6 +236,14 @@ namespace Z{
                         std::wcout << L")";
                 }
 
+                Expression* toArray(Context* ctx) override { 
+                        return new Array(
+                                new VecHelper<Expression>(
+                                        {__newContextExpr(_ctx),
+                                        new Array(args),body,
+                                        new Boolean(is_ellipsis)})); }
+
+
                 void MarkChilds(std::set<Collectable*>& marked) override {
                         marked.insert(this);
                         _ctx->MarkChilds(marked);
@@ -213,7 +257,14 @@ namespace Z{
                 }
                 Expression* call(Context* ctx,std::vector<Expression*> valargs){
                         auto __ctx = new Context(_ctx);
-                        auto &varargs = args->get();
+                        std::vector<Variable*> varargs;
+                        for(auto&x:args->get()){
+                                if(x->type()!=NodeTy::Variable){
+                                        std::wcout << L"Variable expected in macro in args[runtime error]\n";
+                                        return ctx->nil;
+                                }
+                                varargs.push_back(x->as<Variable>());
+                        }
                         uint it = 0, lim = varargs.size() - is_ellipsis;
                         for(;it<lim;++it){
                                 __ctx->createVar(varargs[it]->getname());
@@ -258,101 +309,6 @@ namespace Z{
                 }
         };
 
-        class BinOp: public virtual Expression{
-        public:
-                std::wstring op;
-                Expression * lhs, * rhs;
-                ~BinOp() override { }
-                BinOp(const Token& op, Expression * lhs, Expression * rhs):op(L"binary@" + op.str),lhs(lhs),rhs(rhs){}
-                virtual ret_ty emit(inp_ty) override {
-                        std::wcout << L"(";
-                        lhs->emit();
-                        for(int i = 7;i<op.length();++i){
-                                std::wcout << (wchar_t)op[i];
-                        }
-                        rhs->emit();
-                        if(op == L"binary@["){
-                                std::wcout << L"]";
-                        }
-                        std::wcout << L")";
-                }
-                virtual Expression* eval(Context*ctx)override{
-                        DBG_TRACE();
-                        auto builtin = ctx->findBuiltinOp(op);
-                        DBG_TRACE("builtin:%li",(intptr_t)builtin);
-                        if(builtin){
-                                return builtin(ctx,{lhs,rhs});
-                        }
-                        auto fun = ctx->getVar(op);
-                        if(fun->type()==NodeTy::NativeFunction){
-                                return dynamic_cast<NativeFunction*>(fun)->call(ctx,{lhs,rhs});
-                        }
-                        if(fun->type() == NodeTy::Function){
-                                return fun->as<Function>()->call(ctx,{lhs->eval(ctx),rhs->eval(ctx)},false);
-                        }
-                        if(fun->type() == NodeTy::Macro){
-                                return fun->as<Macro>()->call(ctx,{lhs,rhs});
-                        }
-
-                        return ctx->nil;
-
-                }
-                void FullRelease()override{ 
-                        lhs->FullRelease(); 
-                        rhs->FullRelease();
-                        delete this; 
-                }
-                void MarkChilds(std::set<Collectable*>& marked) override {
-                        marked.insert(this);
-                        lhs->MarkChilds(marked);
-                        rhs->MarkChilds(marked);
-                }
-                virtual NodeTy type() override { return NodeTy::BinOp; }
-        };
-
-        class UnOp: public virtual Expression{
-                std::wstring op;
-                Expression * lhs;
-        public:
-                ~UnOp() override { }
-                UnOp(const std::wstring& op, Expression * lhs):op(L"unary@"+op),lhs(lhs){}
-                virtual ret_ty emit(inp_ty) override {                        
-                        std::wcout << L"(";
-                        for(int i =6;i<op.length();++i){
-                                std::wcout << (wchar_t)op[i];
-                        }
-                        lhs->emit();
-                        std::wcout << L")";
-                }
-                virtual Expression* eval(Context*ctx)override{
-                        DBG_TRACE();
-                        auto builtin = ctx->findBuiltinOp(op);
-                        if(builtin){
-                                return builtin(ctx,{lhs});
-                        }
-                        auto fun = ctx->getVar(op);
-                        if(fun->type()==NodeTy::NativeFunction){
-                                return fun->as<NativeFunction>()->call(ctx,{lhs});
-                        }
-                        if(fun->type()==NodeTy::Function){
-                                return fun->as<Function>()->call(ctx,{lhs});
-                        }
-                        if(fun->type() == NodeTy::Macro){
-                                return fun->as<Macro>()->call(ctx,{lhs});
-                        }
-                        return ctx->nil;
-                }
-                void FullRelease()override{ 
-                        lhs->FullRelease(); 
-                        delete this; 
-                }
-                void MarkChilds(std::set<Collectable*>& marked) override {
-                        marked.insert(this);
-                        lhs->MarkChilds(marked);
-                }
-                virtual NodeTy type() override { return NodeTy::UnOp; }
-        };
-
         class String: public virtual Expression{
         public:
                 std::wstring* value;
@@ -393,7 +349,11 @@ namespace Z{
                         for(auto&x:*value){
                                 ++i;
                                 std::wcout <<L"\"" <<  x.first << L"\"=";
-                                x.second->emit();
+                                if(x.second==this){
+                                        std::wcout << L" @self ";
+                                }else{
+                                        x.second->emit();
+                                }
                                 if(i != value->size()){
                                         std::wcout << L",";
                                 }
@@ -443,6 +403,7 @@ namespace Z{
                         }
                         return ctx->nil;
                 }
+                Expression* toHash(Context* ctx) override { return this; }
                 Expression* set(Context* ctx, const std::wstring & key, Expression* value){
                         auto iter = this->value->find(L"set:"+key);
                         if(iter==this->value->end()){
@@ -471,23 +432,133 @@ namespace Z{
                 }
                 virtual NodeTy type() override { return NodeTy::Hash; }
         };
-
-        class Boolean: public virtual Expression{
+        class ContextExpr: public virtual Expression{
         public:
-                bool value;
-                ~Boolean() override { }
-                Boolean(bool value):value(value){}
+                Context* value;
+                ~ContextExpr() override { }
+                ContextExpr(Context* value):value(value){}
                 virtual ret_ty emit(inp_ty) override {
-                        std::wcout << (value?L"true":L"false");
+                        std::wcout << L"@context:";
+                        Hash(value->env).emit();
                 }
                 virtual Expression* eval(Context*ctx)override{
                         DBG_TRACE();
-                        return this;       
+                        return this;
+                }
+                virtual NodeTy type() override { return NodeTy::ContextExpr; }
+                void FullRelease() override {
+                        delete value;
+                        delete this;
+                }             
+
+                Expression* toHash(Context* ctx) override { return new Hash(value->env); }
+                void MarkChilds(std::set<Collectable*>&) override {}
+        };
+
+
+        class BinOp: public virtual Expression{
+        public:
+                std::wstring op;
+                Expression * lhs, * rhs;
+                ~BinOp() override { }
+                BinOp(const Token& op, Expression * lhs, Expression * rhs):op(L"binary@" + op.str),lhs(lhs),rhs(rhs){}
+                virtual ret_ty emit(inp_ty) override {
+                        std::wcout << L"(";
+                        lhs->emit();
+                        for(int i = 7;i<op.length();++i){
+                                std::wcout << (wchar_t)op[i];
+                        }
+                        rhs->emit();
+                        if(op == L"binary@["){
+                                std::wcout << L"]";
+                        }
+                        std::wcout << L")";
+                }
+                Expression* toArray(Context* ctx) override { 
+                        return new Array(
+                                new VecHelper<Expression>(
+                                        {new String(new std::wstring(op)),lhs,rhs})); }
+
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
+                        auto builtin = ctx->findBuiltinOp(op);
+                        DBG_TRACE("builtin:%li",(intptr_t)builtin);
+                        if(builtin){
+                                return builtin(ctx,{lhs,rhs});
+                        }
+                        auto fun = ctx->getVar(op);
+                        if(fun->type()==NodeTy::NativeFunction){
+                                return dynamic_cast<NativeFunction*>(fun)->call(ctx,{lhs,rhs});
+                        }
+                        if(fun->type() == NodeTy::Function){
+                                return fun->as<Function>()->call(ctx,{lhs->eval(ctx),rhs->eval(ctx)},false);
+                        }
+                        if(fun->type() == NodeTy::Macro){
+                                return fun->as<Macro>()->call(ctx,{lhs,rhs});
+                        }
+
+                        return ctx->nil;
+
+                }
+                void FullRelease()override{ 
+                        lhs->FullRelease(); 
+                        rhs->FullRelease();
+                        delete this; 
                 }
                 void MarkChilds(std::set<Collectable*>& marked) override {
                         marked.insert(this);
+                        lhs->MarkChilds(marked);
+                        rhs->MarkChilds(marked);
                 }
-                virtual NodeTy type() override { return NodeTy::Boolean; }
+                virtual NodeTy type() override { return NodeTy::BinOp; }
+        };
+
+        class UnOp: public virtual Expression{
+                std::wstring op;
+                Expression * lhs;
+        public:
+                ~UnOp() override { }
+                UnOp(const std::wstring& op, Expression * lhs):op(L"unary@"+op),lhs(lhs){}
+                virtual ret_ty emit(inp_ty) override {                        
+                        std::wcout << L"(";
+                        for(int i =6;i<op.length();++i){
+                                std::wcout << (wchar_t)op[i];
+                        }
+                        lhs->emit();
+                        std::wcout << L")";
+                }
+                Expression* toArray(Context* ctx) override { 
+                        return new Array(
+                                new VecHelper<Expression>(
+                                        {new String(new std::wstring(op)),lhs})); }
+
+                virtual Expression* eval(Context*ctx)override{
+                        DBG_TRACE();
+                        auto builtin = ctx->findBuiltinOp(op);
+                        if(builtin){
+                                return builtin(ctx,{lhs});
+                        }
+                        auto fun = ctx->getVar(op);
+                        if(fun->type()==NodeTy::NativeFunction){
+                                return fun->as<NativeFunction>()->call(ctx,{lhs});
+                        }
+                        if(fun->type()==NodeTy::Function){
+                                return fun->as<Function>()->call(ctx,{lhs});
+                        }
+                        if(fun->type() == NodeTy::Macro){
+                                return fun->as<Macro>()->call(ctx,{lhs});
+                        }
+                        return ctx->nil;
+                }
+                void FullRelease()override{ 
+                        lhs->FullRelease(); 
+                        delete this; 
+                }
+                void MarkChilds(std::set<Collectable*>& marked) override {
+                        marked.insert(this);
+                        lhs->MarkChilds(marked);
+                }
+                virtual NodeTy type() override { return NodeTy::UnOp; }
         };
 
         class Nil: public virtual Expression{
@@ -553,6 +624,11 @@ namespace Z{
                         what->FullRelease(); 
                         delete this; 
                 }
+                Expression* toArray(Context* ctx) override { 
+                        return new Array(
+                                new VecHelper<Expression>(
+                                        {what})); }
+
                 virtual NodeTy type() override { return NodeTy::Delete; }
         };
 
@@ -564,6 +640,11 @@ namespace Z{
                 virtual ret_ty emit(inp_ty) override {
                         std::wcout << (L"..."); what->emit();
                 }
+                Expression* toArray(Context* ctx) override { 
+                        return new Array(
+                                new VecHelper<Expression>(
+                                        {what})); }
+
                 virtual Expression* eval(Context*ctx)override{
                         DBG_TRACE();
                         auto ell = what->eval(ctx);
@@ -595,6 +676,11 @@ namespace Z{
                         from->emit(); std::wcout << L" to "; to->emit(); std::wcout << L' ';
                         body->emit();
                 }
+                Expression* toArray(Context* ctx) override { 
+                        return new Array(
+                                new VecHelper<Expression>(
+                                        {var,from,to,body})); }
+
                 virtual Expression* eval(Context*ctx)override{
                         DBG_TRACE();
                         Context* _ctx = new Context(ctx);
@@ -665,6 +751,11 @@ namespace Z{
                         /*_ctx->release();*/
                         return res;
                 }
+                Expression* toArray(Context* ctx) override { 
+                        return new Array(
+                                new VecHelper<Expression>(
+                                        {cond,body})); }
+
                 void FullRelease()override{ 
                         body->FullRelease(); 
                         cond->FullRelease();
@@ -710,6 +801,9 @@ namespace Z{
                         marked.insert(this);
                         arr->MarkChilds(marked);
                 }
+                Expression* toArray(Context* ctx) override { 
+                        return new Array(arr); }
+
                 void FullRelease()override{ 
                         arr->FullRelease(); 
                         delete this; 
@@ -760,6 +854,11 @@ namespace Z{
                         arr->MarkChilds(marked);
                         keys->MarkChilds(marked);
                 }
+                Expression* toArray(Context* ctx) override { 
+                        return new Array(
+                                new VecHelper<Expression>(
+                                        {new Array(keys), new Array(arr)})); }
+
                 virtual NodeTy type() override { return NodeTy::HashAst; }
         };
 
@@ -787,11 +886,11 @@ namespace Z{
 
         class Lambda: public virtual Expression{
                 Expression* body;
-                VecHelper<Variable>* args;
+                VecHelper<Expression>* args;
                 bool is_ellipsis;
         public:
                 ~Lambda() override { }
-                Lambda(Expression * body, VecHelper<Variable> *args, bool is_ellipsis=false):body(body),args(args),
+                Lambda(Expression * body, VecHelper<Expression> *args, bool is_ellipsis=false):body(body),args(args),
                         is_ellipsis(is_ellipsis){}
                 virtual ret_ty emit(inp_ty) override {
                         Function(nullptr,body,args,is_ellipsis).emit();
@@ -812,15 +911,20 @@ namespace Z{
                         body->MarkChilds(marked);
                         args->MarkChilds(marked);
                 }
+                Expression* toArray(Context* ctx) override { 
+                        return new Array(
+                                new VecHelper<Expression>(
+                                        {new Array(args),body})); }
+
                 virtual NodeTy type() override { return NodeTy::Lambda; }
         };
         class MacroAst: public virtual Expression{
                 Expression* body;
-                VecHelper<Variable>* args;
+                VecHelper<Expression>* args;
                 bool is_ellipsis;
         public:
                 ~MacroAst() override { }
-                MacroAst(Expression * body, VecHelper<Variable> *args, bool is_ellipsis=false):body(body),args(args),
+                MacroAst(Expression * body, VecHelper<Expression> *args, bool is_ellipsis=false):body(body),args(args),
                         is_ellipsis(is_ellipsis){}
                 virtual ret_ty emit(inp_ty) override {
                         Function(nullptr,body,args,is_ellipsis).emit();
@@ -836,6 +940,11 @@ namespace Z{
                         //ctx->addRef();
                         return new Macro(ctx,body,args,is_ellipsis);       
                 }
+                Expression* toArray(Context* ctx) override { 
+                        return new Array(
+                                new VecHelper<Expression>(
+                                        {new Array(args),body})); }
+
                 void MarkChilds(std::set<Collectable*>& marked) override {
                         marked.insert(this);
                         body->MarkChilds(marked);
@@ -865,6 +974,13 @@ namespace Z{
                         expr->FullRelease(); 
                         delete this; 
                 }
+                Expression* toArray(Context* ctx) override { 
+                        /*return new Array(
+                                new VecHelper<Expression>(
+                                        {expr,new ContextExpr(_ctx)}));*/
+                        return expr->toArray(ctx);
+                }
+
                 void MarkChilds(std::set<Collectable*>& marked) override {
                         marked.insert(this);
                         _ctx->MarkChilds(marked);
@@ -892,12 +1008,16 @@ namespace Z{
                         expr->FullRelease(); 
                         delete this; 
                 }
+                Expression* toArray(Context* ctx) override { 
+                        return new Array(
+                                new VecHelper<Expression>(
+                                        {expr})); }
+
                 void MarkChilds(std::set<Collectable*>& marked) override {
                         expr->MarkChilds(marked);
                         marked.insert(this);
                 }
         };
-
         class FCall: public virtual Expression{
                 Expression* func;
                 VecHelper<Expression>* args;
@@ -914,6 +1034,10 @@ namespace Z{
                                 }
                         }
                         std::wcout << L')';
+                }
+
+                Expression* toArray(Context* ctx) override { 
+                        return new Array(new VecHelper<Expression>(new std::vector<Expression*>({new Array(args),func})));
                 }
 
                 virtual Expression* eval(Context*ctx)override{
@@ -1069,6 +1193,15 @@ namespace Z{
                         }
                         return default_val->eval(ctx);
                 }
+                Expression* toArray(Context* ctx) override  {
+                        return new Array(
+                                new VecHelper<Expression>(
+                                        new  std::vector<Expression*>({
+                                                what,
+                                                new Array(cond),
+                                                new Array(res),
+                                                default_val})));
+                }
                 void MarkChilds(std::set<Collectable*>& marked) override {
                         marked.insert(this);
                         what->MarkChilds(marked);
@@ -1105,6 +1238,13 @@ namespace Z{
                                 std::wcout << L";\n";
                         }
                         std::wcout << L"}";
+                }
+                Expression* toArray(Context* ctx) override  {
+                        return new Array(
+                                new VecHelper<Expression>(
+                                        new  std::vector<Expression*>({
+                                                new Array(cond),
+                                                new Array(res)})));
                 }
                 virtual Expression* eval(Context*ctx)override{
                         DBG_TRACE();
@@ -1153,6 +1293,7 @@ namespace Z{
                         /*_ctx->release();*/
                         return last;
                 }
+                Expression* toArray(Context* ctx) override { return new Array(block); }
                 virtual NodeTy type() override { return NodeTy::Block; }
                 virtual void FullRelease() override { 
                         block->FullRelease(); 
@@ -1186,6 +1327,9 @@ namespace Z{
                         value->FullRelease(); 
                         delete this; 
                 }
+                
+                Expression* toArray(Context* ctx) override { return new Array(new VecHelper<Expression>({value})); }
+
                 void MarkChilds(std::set<Collectable*>& marked) override {
                         marked.insert(this);
                         value->MarkChilds(marked);
@@ -1223,6 +1367,8 @@ namespace Z{
                         } 
                         delete this; 
                 }
+                Expression* toArray(Context* ctx) override { return new Array(new VecHelper<Expression>({value})); }
+
                 void MarkChilds(std::set<Collectable*>& marked) override {
                         marked.insert(this);
                         if(value){
@@ -1258,6 +1404,9 @@ namespace Z{
                                 default: return L"UndefinedExpression";
                         }
                         #undef _case
+                }
+                Expression* __newContextExpr(Context*ctx){
+                        return new ContextExpr(ctx);
                 }
         }
 }

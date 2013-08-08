@@ -257,6 +257,14 @@ Expression* _assign(Z::Context* ctx, const std::vector<Expression*>&args){
 
 }
 
+Expression* toArray(Z::Context* ctx, const std::vector<Expression*>&args){
+        auto expr = args.front()->eval(ctx);
+        return expr->toArray(ctx);
+}
+Expression* toHash(Z::Context* ctx, const std::vector<Expression*>&args){
+        return args.front()->eval(ctx)->toHash(ctx);
+}
+
 Expression* _createVar(Z::Context* ctx, const std::vector<Expression*>&args){
         for(auto&x:args){
                 auto expr = x->eval(ctx);
@@ -313,7 +321,9 @@ int main(){
         ctx->createVar(L"Native");
         ctx->setVar(L"Native",new Hash(new std::unordered_map<std::wstring, Expression*>({
                 {L"ast",new Hash(new std::unordered_map<std::wstring, Expression*>({
-                        {L"append",new NativeFunction(append)}}))},
+                        {L"append",new NativeFunction(append)},
+                        {L"toArray",new NativeFunction(toArray)},
+                        {L"toHash",new NativeFunction(toHash)}}))},
                 {L"str",new Hash(new std::unordered_map<std::wstring,Expression*>({
                         {L"len",new NativeFunction(len)}}))},
                 {L"Env",new Hash(new std::unordered_map<std::wstring, Expression*>({
