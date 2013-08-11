@@ -465,6 +465,7 @@ namespace Z{
                                                 auto body = expectExpression();
                                                 if(!body){
                                                         cond->FullRelease();
+                                                        return nullptr;
                                                 }
                                                 return new While(cond,body);
                                         }
