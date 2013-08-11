@@ -1,4 +1,3 @@
-
 let eval = (what) -> 
         eval!(parse!(what))
 
@@ -10,16 +9,13 @@ let read! = () ->
 
 let map = (func, list) -> {
         var res = []
-        for i = 0 to list.len()-1 
+        for i = 0 to list.len-1 
                 res[i] = func(list[i])
         res
 }
 
 let reduce = (func, list) -> {
-        let len = list.len()
-        showln!(len)
-        showln!(func)
-        showln!(list)
+        let len = list.len
         cond {
                 (len == 0) => nil;
                 true => {
@@ -39,7 +35,7 @@ let bind! = (self,method) ->
                 method(self,...args)
 
 let for_each = (list,func) -> {
-        for i = 0 to list.len()-1 
+        for i = 0 to list.len-1 
                 func(list[i],i)
 }
 String.each = (Array.each = for_each)

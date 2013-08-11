@@ -1,4 +1,3 @@
-run
 let object = ${#{
         is_nil = false
 }}
@@ -58,6 +57,7 @@ let Number = #{
         base = Object.create(),
         new = self-> 0,
         create = self -> 0,
+        "get:number?" = ()->true,
         times = (self,body)->
                 for i = 0 to self-1
                         body(i)
@@ -94,6 +94,8 @@ Array["$system_getter"]=system_getter
 String["$system_getter"]=system_getter
 Expression["$system_getter"]=system_getter
 Nil["$system_getter"]=system_getter
+let inf = 1/0;
+let nan = (-1)^0.5;
 export Expression
 export Number
 export String
@@ -101,4 +103,5 @@ export Class
 export Object
 export Array
 export Nil
-run!
+export inf
+export nan

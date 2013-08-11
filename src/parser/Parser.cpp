@@ -22,15 +22,17 @@ namespace Z{
                 defop(L"*",130);
                 defop(L"!",150);
                 defop(L"#",150);
+                defop(L"^",160);
                 defop(L"%",130);
                 defop(L"^",70);
                 defop(L"&&",50);
-                defop(L".",160);
+                defop(L".",170);
                 defop(L"and",50);
                 defop(L"or",40);
                 defop(L"||",30);
                 defop(L"~",150);
                 is_right_assoc.insert(L"=");
+                is_right_assoc.insert(L"^");
                 tkn.DefKw(L",",SubTokTy::Comma,true);
                 tkn.DefKw(L";",SubTokTy::Semicolon,true);
                 tkn.DefKw(L"class",SubTokTy::Class,true);
@@ -57,11 +59,11 @@ namespace Z{
                 tkn.DefKw(L"var",SubTokTy::Var,true);
                 tkn.DefKw(L"->",SubTokTy::Arrow,true);
                 tkn.DefKw(L"=>",SubTokTy::Arrow2,true);
-                defop(L"[",160,SubTokTy::LSqParen,tok(SubTokTy::RSqParen));
+                defop(L"[",170,SubTokTy::LSqParen,tok(SubTokTy::RSqParen));
                 tkn.DefKw(L"]",SubTokTy::RSqParen);
                 tkn.DefKw(L"{",SubTokTy::LBlock,true);
                 tkn.DefKw(L"}",SubTokTy::RBlock);
-                defop(L"(",160, SubTokTy::LParen,tok(SubTokTy::RParen));
+                defop(L"(",170, SubTokTy::LParen,tok(SubTokTy::RParen));
                 tkn.DefKw(L")", SubTokTy::RParen);
                 #undef tok
                 op_precedence[L"unary$-"] = 150;                
@@ -144,10 +146,15 @@ namespace Z{
         }
         Expression* Parser::expectBinary(int64_t prec, Expression* lhs){
                 DBG_TRACE();
-                if(is_right_assoc.find(tkn.Last().str)!=is_right_assoc.end()){
+                if(tkn.Last().sty == SubTokTy::Oper && is_right_assoc.find(tkn.Last().str)!=is_right_assoc.end()){
                         auto op = tkn.Last();
                         tkn.Next();
-                        auto rhs = expectExpression();
+                        Expression* rhs;
+                        if(op.str == L"^"){ // I know that this is really very bad code (:
+                                rhs = expectPrimary();
+                        }else{
+                                rhs = expectExpression();
+                        }
                         if(!rhs){
                                 lhs->FullRelease();
                                 return nullptr;

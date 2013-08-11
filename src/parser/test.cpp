@@ -167,6 +167,20 @@ defop(sub,-,Number);
 defop(div,/,Number);
 defop(mul,*,Number);
 #undef defop
+#define defop(name,op,T)\
+        Expression* name(Z::Context* ctx, const std::vector<Expression*>&args){\
+                if(args.size()!=1){\
+                        return ctx->nil;\
+                }\
+                auto lhs = args.front()->eval(ctx)->as<T>();\
+                if(!lhs){\
+                        return ctx->nil;\
+                }\
+                return new T(op lhs->value);\
+        }
+defop(plus,+,Number);
+defop(neg,-,Number);
+#undef defop
 #define defop(name,op)\
         Expression* name(Z::Context* ctx, const std::vector<Expression*>&args){\
                 if(args.size()!=2){\
@@ -234,6 +248,18 @@ Expression* _not(Z::Context* ctx, const std::vector<Expression*>&args){
         }
         auto lhs = args.front()->eval(ctx);
         return new Boolean(!::to_bool(lhs));
+}
+Expression* _pow(Z::Context* ctx, const std::vector<Expression*>&args){
+        if(args.size()!=2){
+                return ctx->nil;
+        }
+        auto lhs = args.front()->eval(ctx)->as<Number>(),
+            rhs = args.back()->eval(ctx)->as<Number>();
+        if(!lhs || !rhs){
+                return ctx->nil;
+        }
+        auto res = pow(lhs->value,rhs->value);
+        return new Number(res);
 }
 Expression* _index(Z::Context* ctx, const std::vector<Expression*>&args){
         if(args.size()!=2){
@@ -331,10 +357,13 @@ int main(){
         //nested contextext is needed for holding global variables(aka exported modules variables)
         ctx->defBuiltinOp(L"binary@+",add);
         ctx->defBuiltinOp(L"binary@-",sub);
+        ctx->defBuiltinOp(L"unary@+",plus);
+        ctx->defBuiltinOp(L"unary@-",neg);
         ctx->defBuiltinOp(L"binary@/",div);
         ctx->defBuiltinOp(L"binary@*",mul);
         ctx->defBuiltinOp(L"binary@<",less);
         ctx->defBuiltinOp(L"binary@<=",less_eq);
+        ctx->defBuiltinOp(L"binary@^",_pow);
         ctx->defBuiltinOp(L"binary@>",great);
         ctx->defBuiltinOp(L"binary@>=",great_eq);
         ctx->defBuiltinOp(L"binary@==",equal);

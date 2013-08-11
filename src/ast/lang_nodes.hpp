@@ -886,6 +886,7 @@ namespace Z{
                         ctx = ctx->getRoot();
                         ctx->createVar(variable.str);
                         ctx->setVar(variable.str, val);
+                        ctx->setImmutableState(variable.str);
                         return val;
                 }
                 void MarkChilds(std::set<Collectable*>& marked) override {
