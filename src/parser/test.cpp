@@ -206,6 +206,17 @@ Expression* _and(Z::Context* ctx, const std::vector<Expression*>&args){
         }
         return rhs;
 }
+Expression* _concat(Z::Context* ctx, const std::vector<Expression*>&args){
+        if(args.size()!=2){
+                return ctx->nil;
+        }
+        auto lhs = args.front()->eval(ctx)->as<String>(),
+                rhs = args.back()->eval(ctx)->as<String>();
+        if(!lhs || !rhs){
+            return ctx->nil;
+        }
+        return new String(new std::wstring(std::move(*lhs->value + *rhs->value)));
+}
 Expression* _or(Z::Context* ctx, const std::vector<Expression*>&args){
         if(args.size()!=2){
                 return ctx->nil;
@@ -333,6 +344,7 @@ int main(){
         ctx->defBuiltinOp(L"unary@not",_not);
         ctx->defBuiltinOp(L"binary@&&",_and);
         ctx->defBuiltinOp(L"binary@||",_or);
+        ctx->defBuiltinOp(L"binary@..",_concat);
         ctx->defBuiltinOp(L"unary@!",_not);
         ctx->defBuiltinOp(L"binary@[",_index);
         ctx->defBuiltinOp(L"binary@.",_index);

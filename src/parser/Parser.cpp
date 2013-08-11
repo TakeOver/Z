@@ -18,6 +18,7 @@ namespace Z{
                 defop(L">",100);
                 defop(L"<",100);
                 defop(L"/",130);
+                defop(L"..",10);
                 defop(L"*",130);
                 defop(L"!",150);
                 defop(L"#",150);
