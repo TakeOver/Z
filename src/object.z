@@ -40,18 +40,18 @@ let String = #{
         new = self-> "",
         create = self -> "",
         super = self-> self.base.init(),
-        len = Native.str.len,
+        "get:len" = self -> Native.str["len"](self),
         __getindex = Native.str.charAt,
         __setindex = Native.str.setCharAt,
         __iter = (self)-> #{
                         next = iter->{
                                 iter.pos = iter.pos + 1
                                 cond {
-                                        iter.pos >= self.len() => nil
+                                        iter.pos >= self.len => nil
                                         true => self[iter.pos] 
                                 }
                         },
-                        valid = iter -> iter.pos + 1 < self.len()
+                        valid = iter -> iter.pos + 1 < self.len
                 }
 }
 let Number = #{
@@ -69,13 +69,14 @@ let Expression = #{
         append = Native.ast.append,
         getchild = Native.ast.getchild,
         toArray = Native.ast.toArray,
-        expr = Native.ast.expr
+        "get:expr" = Native.ast.expr,
+        eval! = eval!
 }
 let Array = #{
         base = Object.create(),
         new = self-> [],
         create = self -> [],
-        len = String.len
+        "get:len" = self -> Native.str["len"](self)
 }
 let __instanceof = (derived,base) -> {
         while derived.base != nil and derived.instance != base

@@ -368,7 +368,10 @@ namespace Z{
                         delete value; 
                         delete this; 
                 }
-                Expression* get(Context* ctx, const std::wstring & key){
+                Expression* get(Context* ctx, const std::wstring & key, Expression* self = nullptr){
+                        if ( !self ){
+                                self = this;
+                        }
                         // first priority to user declared getters/setters. ((s|g)et:<key>)
                         auto iter = value->find(L"get:"+key);
                         if(iter==value->end()){
@@ -385,31 +388,34 @@ namespace Z{
                                 //$system_getter found;
                                 auto getter = iter->second;
                                 if(getter->type()==NodeTy::Function){
-                                        return getter->as<Function>()->call(ctx,{this,new String(new std::wstring(key))});
+                                        return getter->as<Function>()->call(ctx,{self,new String(new std::wstring(key))});
                                 }
                                 if(getter->type()==NodeTy::NativeFunction){
-                                        return getter->as<NativeFunction>()->call(ctx,{this,new String(new std::wstring(key))});
+                                        return getter->as<NativeFunction>()->call(ctx,{self,new String(new std::wstring(key))});
                                 }
                                 if(getter->type()==NodeTy::Macro){
-                                        return getter->as<Macro>()->call(ctx,{this,new String(new std::wstring(key))});
+                                        return getter->as<Macro>()->call(ctx,{self,new String(new std::wstring(key))});
                                 }
                                 return ctx->nil;
                         }
                         // get:<key> found
                         auto getter = iter->second;
                         if(getter->type()==NodeTy::Function){
-                                return getter->as<Function>()->call(ctx,{this});
+                                return getter->as<Function>()->call(ctx,{self});
                         }
                         if(getter->type()==NodeTy::NativeFunction){
-                                return getter->as<NativeFunction>()->call(ctx,{this});
+                                return getter->as<NativeFunction>()->call(ctx,{self});
                         }
                         if(getter->type()==NodeTy::Macro){
-                                return getter->as<Macro>()->call(ctx,{this});
+                                return getter->as<Macro>()->call(ctx,{self});
                         }
                         return ctx->nil;
                 }
                 Expression* toHash(Context* ctx) override { return this; }
-                Expression* set(Context* ctx, const std::wstring & key, Expression* value){
+                Expression* set(Context* ctx, const std::wstring & key, Expression* value, Expression* self = nullptr){
+                        if ( !self ){
+                                self = this;
+                        }
                         auto iter = this->value->find(L"set:"+key);
                         if(iter==this->value->end()){
                                 return (*this->value)[key] = value;
@@ -1059,7 +1065,7 @@ namespace Z{
                                                 return ctx->nil;
                                         }
                                 }
-                                fun = __obj->as<Hash>()->get(ctx,*_key->as<String>()->value);
+                                fun = __obj->as<Hash>()->get(ctx,*_key->as<String>()->value,_obj);
                                 _args.push_back(_obj);
                         }else{
                                 fun = func->eval(ctx);

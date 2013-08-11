@@ -239,7 +239,7 @@ Expression* _index(Z::Context* ctx, const std::vector<Expression*>&args){
         if(args.size()!=2){
                 return ctx->nil;
         }
-        auto obj = args.front()->eval(ctx),
+        auto obj = args.front()->eval(ctx), _obj = obj,
                 key = args.back()->eval(ctx);
         if(key->type()==Z::NodeTy::String){
                 if(obj->type()!=Z::NodeTy::Hash){
@@ -248,7 +248,7 @@ Expression* _index(Z::Context* ctx, const std::vector<Expression*>&args){
                                 return ctx->nil;
                         }
                 }
-                return obj->as<Hash>()->get(ctx,*key->as<String>()->value);
+                return obj->as<Hash>()->get(ctx,*key->as<String>()->value,_obj);
         }
         if(key->type()!=Z::NodeTy::Number || obj->type()!=Z::NodeTy::Array){
                 return ctx->nil;
