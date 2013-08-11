@@ -31,12 +31,21 @@ Expression* show(Context* ctx, const std::vector<Expression*>& args){
 }
 Expression* eval(Context* ctx, const std::vector<Expression*>& args){
         DBG_TRACE();
-        auto expr = args.front()->eval(ctx)->eval(ctx);
+        auto expr = args.front()->eval(ctx);
         auto ast = expr->as<AstNode>();
         if(ast){
                 return ast->expr->eval(ast->_ctx);
         }
-        return expr;
+        return expr->eval(ctx);
+}
+Expression* expr(Context* ctx, const std::vector<Expression*>& args){
+        DBG_TRACE();
+        auto expr = args.front()->eval(ctx);
+        auto ast = expr->as<AstNode>();
+        if(ast){
+                return ast->expr;
+        }
+        return ctx->nil;
 }
 Expression* input(Z::Context* ctx, const std::vector<Expression*>& args){
         DBG_TRACE();
@@ -65,12 +74,29 @@ Expression* append(Z::Context* ctx, const std::vector<Expression*>& args){
         if(!self){
                 return ctx->nil;
         }
-        if(self->expr->type()==NodeTy::HashAst){
+        if(self->expr->type() == NodeTy::ArrayAst){
+                if(args.size()<2){
+                        return ctx->nil;
+                }
+                auto arr = self->expr->as<ArrayAst>();
+                auto value = args[1]->eval(ctx);
+                if(value->type() == NodeTy::AstNode){
+                    value = value->as<AstNode>()->expr;
+                }
+                arr->arr->get().push_back(value);
+
+        }else if(self->expr->type()==NodeTy::HashAst){
                 if(args.size()<3){
                         return ctx->nil;
                 }
                 auto key = args[1]->eval(ctx);
                 auto value = args[2]->eval(ctx);
+                if(key->type() == NodeTy::AstNode){
+                    key = key->as<AstNode>()->expr;
+                }
+                if(value->type() == NodeTy::AstNode){
+                    value = value->as<AstNode>()->expr;
+                }
                 auto hash = dynamic_cast<HashAst*>(self->expr);
                 hash->keys->get().push_back(key);
                 hash->arr->get().push_back(value);
@@ -79,6 +105,9 @@ Expression* append(Z::Context* ctx, const std::vector<Expression*>& args){
                         return ctx->nil;
                 }
                 auto value = (args[1]->eval(ctx));
+                if(value->type() == NodeTy::AstNode){
+                    value = value->as<AstNode>()->expr;
+                }
                 dynamic_cast<Block*>(self->expr)->block->get().push_back(value);
         }
         return self;
@@ -101,7 +130,7 @@ Expression* set(Z::Context*ctx, const std::vector<Expression*>&args){
 }
 Expression* parse(Z::Context*ctx, const std::vector<Expression*>&args){
         DBG_TRACE();
-        auto what = args.back();
+        auto what = args.back()->eval(ctx);
         if(what->type()!=NodeTy::String){
                 return ctx->nil;
         }
@@ -322,7 +351,8 @@ int main(){
         ctx->setVar(L"Native",new Hash(new std::unordered_map<std::wstring, Expression*>({
                 {L"ast",new Hash(new std::unordered_map<std::wstring, Expression*>({
                         {L"append",new NativeFunction(append)},
-                        {L"toArray",new NativeFunction(toArray)},
+                        {L"expr",new NativeFunction(expr)},
+                     //   {L"toArray",new NativeFunction(toArray)}, //deprecated
                         {L"toHash",new NativeFunction(toHash)}}))},
                 {L"str",new Hash(new std::unordered_map<std::wstring,Expression*>({
                         {L"len",new NativeFunction(len)}}))},
@@ -344,8 +374,11 @@ int main(){
                 std::wstring buf, tmp;
                 while(true){
                         std::getline(std::wcin,tmp);
-                        if(tmp == L"run"){
+                        if(tmp == L";;"){
                                 break;
+                        }
+                        if(tmp == L"@exit"){
+                            exit(0);
                         }
                         buf+=tmp + L'\n';
                 }

@@ -438,8 +438,7 @@ namespace Z{
                 ~ContextExpr() override { }
                 ContextExpr(Context* value):value(value){}
                 virtual ret_ty emit(inp_ty) override {
-                        std::wcout << L"@context:";
-                        Hash(value->env).emit();
+                        std::wcout << L"@context";
                 }
                 virtual Expression* eval(Context*ctx)override{
                         DBG_TRACE();
@@ -770,8 +769,8 @@ namespace Z{
         };
 
         class ArrayAst: public virtual Expression{
-                VecHelper<Expression>* arr;
         public:
+                VecHelper<Expression>* arr;
                 ~ArrayAst() override { }
                 ArrayAst(decltype(arr) arr):arr(arr){}
                 virtual ret_ty emit(inp_ty) override {
@@ -804,7 +803,7 @@ namespace Z{
                 Expression* toArray(Context* ctx) override { 
                         return new Array(arr); }
 
-                void FullRelease()override{ 
+                void FullRelease() override { 
                         arr->FullRelease(); 
                         delete this; 
                 }
@@ -1069,6 +1068,8 @@ namespace Z{
                                 }else{
                                         if ( fun->type() == NodeTy::Macro ) {
                                                 _args.push_back( new AstNode(x,ctx) );
+                                        }else if ( fun->type() == NodeTy::NativeFunction ) {
+                                                _args.push_back( x );
                                         } else {
                                                 _args.push_back( x->eval( ctx ) );
                                         }
