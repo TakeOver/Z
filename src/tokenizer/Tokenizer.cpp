@@ -40,7 +40,7 @@ namespace Z{
                 if(failed){
                         return this->__tokNone;
                 }
-                if(contains(keywords,tok.str)){
+                if ( (tok.ty == TokTy::Identifer  || tok.ty == TokTy::Operator ) && contains(keywords,tok.str)){
                         tok.sty = keywords[tok.str];
                 }
                 if(contains(ops,tok.str)){
@@ -120,14 +120,14 @@ namespace Z{
                 }
                 wchar_t c = _curChar();
                 auto l =lineno,p =position;
+                if(is_str(c)){
+                        return Token(TokTy::String,_str(),l,p);
+                }
                 if(is_num0(c)){
                         return Token(TokTy::Number,_num(),l,p);
                 }
                 if(is_letter0(c)){
                         return Token(TokTy::Identifer,_id(),l,p);
-                }
-                if(is_str(c)){
-                        return Token(TokTy::String,_str(),l,p);
                 }
                 if(is_op(c)){
                         return Token(TokTy::Operator,_op(),l,p);

@@ -369,16 +369,20 @@ namespace Z{
                         delete this; 
                 }
                 Expression* get(Context* ctx, const std::wstring & key){
-                        auto iter = value->find(key);
-                        if(iter!=value->end()){
-                                return iter->second;
-                        }
-                        iter = value->find(L"get:"+key);
+                        // first priority to user declared getters/setters. ((s|g)et:<key>)
+                        auto iter = value->find(L"get:"+key);
                         if(iter==value->end()){
+                                // if no getter/setter found -> try to found <key>
+                                iter = value->find(key);
+                                if(iter!=value->end()){
+                                        return iter->second;
+                                }
+                                // else try to found $system_getter, all objects have this.(base object)
                                 iter = value->find(L"$system_getter");
                                 if(iter==value->end()){
                                         return ctx->nil;
                                 }
+                                //$system_getter found;
                                 auto getter = iter->second;
                                 if(getter->type()==NodeTy::Function){
                                         return getter->as<Function>()->call(ctx,{this,new String(new std::wstring(key))});
@@ -391,6 +395,7 @@ namespace Z{
                                 }
                                 return ctx->nil;
                         }
+                        // get:<key> found
                         auto getter = iter->second;
                         if(getter->type()==NodeTy::Function){
                                 return getter->as<Function>()->call(ctx,{this});
